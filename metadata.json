@@ -1,0 +1,6 @@
+{
+  "name": "TradeARG",
+  "description": "Plataforma de alto rendimiento para el trading e inventario de Magic: The Gathering en Argentina.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

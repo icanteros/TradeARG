@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Sora', 'Inter', sans-serif;
+  --font-mono: 'Geist', monospace;
+  --color-primary: #00b8ff;
+  --color-secondary: #00f2ff;
+  --color-background: #05050a;
+  --color-surface: #0b1326;
+  --color-on-surface: #dae2fd;
+  --color-surface-container: #121221;
+}
+
+/* Custom Utilities & Styles */
+
+body {
+  font-family: 'Sora', 'Inter', sans-serif;
+  background-color: #05050a;
+  color: #dae2fd;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #05050a;
+}
+::-webkit-scrollbar-thumb {
+  background: #00b8ff;
+  border-radius: 3px;
+}
+
+/* Retro Grid Background style */
+.retro-grid {
+  background-image: 
+    linear-gradient(rgba(0, 184, 255, 0.04) 1px, transparent 1px), 
+    linear-gradient(90deg, rgba(0, 184, 255, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Glowing Neon Borders and Shadows */
+.neon-border {
+  border: 1px solid rgba(0, 184, 255, 0.25);
+  box-shadow: 0 0 15px rgba(0, 184, 255, 0.08);
+}
+
+.neon-border-cyan {
+  border: 1px solid rgba(0, 242, 255, 0.25);
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.08);
+}
+
+.neon-border:hover {
+  border-color: #00b8ff;
+  box-shadow: 0 0 20px rgba(0, 184, 255, 0.25);
+}
+
+.neon-border-cyan:hover {
+  border-color: #00f2ff;
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.25);
+}
+
+.neon-text-glow {
+  text-shadow: 0 0 10px rgba(0, 184, 255, 0.5);
+}
+
+.neon-text-glow-cyan {
+  text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+}
+
+/* Float Animations */
+@keyframes float {
+  0% { transform: translateY(0px) rotate(12deg); }
+  50% { transform: translateY(-15px) rotate(13deg); }
+  100% { transform: translateY(0px) rotate(12deg); }
+}
+
+@keyframes float-reverse {
+  0% { transform: translateY(0px) rotate(-12deg); }
+  50% { transform: translateY(-15px) rotate(-11deg); }
+  100% { transform: translateY(0px) rotate(-12deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float-reverse 6s ease-in-out infinite;
+}
+
+.mythic-glow {
+  box-shadow: 0 0 15px rgba(255, 183, 131, 0.4);
+}
+
+.rare-glow {
+  box-shadow: 0 0 12px rgba(0, 184, 255, 0.35);
+}
+
+.card-transition {
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.neon-card-hover:hover {
+  box-shadow: 0 0 25px rgba(0, 184, 255, 0.25), 0 0 10px rgba(0, 242, 255, 0.15);
+  border-color: #00b8ff;
+  transform: translateY(-4px);
+}
