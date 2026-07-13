@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card } from '../types';
 import { SEARCHABLE_DATABASE } from '../data';
-import { Search, User, MapPin, Tag, MessageSquare, AlertCircle, Sparkles, Filter, CheckCircle2, ArrowRight, UserCheck } from 'lucide-react';
+import { Search, User, MapPin, MessageSquare, AlertCircle, Sparkles, CheckCircle2, UserCheck } from 'lucide-react';
 import { fetchCommunityListings } from '../supabaseService';
 
 interface CommunitySearchViewProps {
