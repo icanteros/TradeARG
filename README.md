@@ -1,81 +1,81 @@
 # TradeARG 🇦🇷⚖️
 
-**TradeARG** es la plataforma web definitiva para la cotización, gestión y canjes de cartas de **Magic: The Gathering (MTG)** diseñada específicamente para la comunidad de jugadores en Argentina.
+**TradeARG** is the ultimate web platform for Magic: The Gathering (MTG) card cataloging, pricing, and trading, tailored specifically for the MTG community in Argentina.
 
 ---
 
-## 🌟 Características Principales
+## 🌟 Key Features
 
-* **💵 Doble Cotización de Dólar (Oficial & Blue)**:
-  * El mercado local de MTG se rige por valores en dólares. TradeARG consulta en tiempo real las cotizaciones del **Dólar Oficial** y del **Dólar Blue** (vía `DolarApi`).
-  * Cuenta con un selector interactivo en la cabecera para alternar entre ambas tasas y recalcular de inmediato el precio de todo tu inventario en Pesos Argentinos (ARS).
-* **🔍 Buscador y Catálogo de Cartas**:
-  * Integración directa con la API de **Scryfall** para obtener de forma instantánea imágenes oficiales, rarezas, colecciones y precios actualizados en dólares.
-* **📦 Gestión de Inventario**:
-  * Lleva un control detallado de tu carpeta de cambios. Agrega cartas individuales o personaliza sus especificaciones: cantidad, idioma, si es Foil ✨, notas de conservación (NM, SP, MP, HP), etc.
-* **☁️ Autenticación y Sincronización en la Nube (Supabase)**:
-  * Soporte completo para sesiones en la nube con **Supabase Auth**.
-  * Sincronización persistente en tiempo real de tu perfil y colección con la base de datos PostgreSQL.
-  * **Modo Invitado (Fallback)**: Si no deseas iniciar sesión, la plataforma guarda de forma local todos tus datos usando `localStorage`.
-* **🤝 Canjes de la Comunidad**:
-  * Busca cartas en posesión de otros coleccionistas en el país, visualiza sus perfiles (ubicación, reputación, tiendas habituales) y envíales consultas de canje directas.
-* **🤖 Canjes Inteligentes (Auto-Matcher)**:
-  * Algoritmo inteligente que analiza las cartas en tu inventario y busca coincidencias exactas con otros jugadores de la comunidad que tengan cartas de valor y magnitud equivalentes.
-* **📋 Importación Masiva (Bulk Import)**:
-  * Sube listas de mazos enteras pegando texto plano (formato `Cantidad Nombre`). La app se encarga de parsear y resolver el lote completo consultando la API de Scryfall.
-
----
-
-## 🛠️ Stack Tecnológico
-
-* **Frontend**: React (v19), TypeScript, Vite, Tailwind CSS, Lucide React, Motion (Framer Motion).
-* **Base de Datos y Auth**: Supabase (Auth y base de datos PostgreSQL en tiempo real).
-* **APIs de Terceros**: Scryfall API (MTG Data) y DolarApi (Tipos de cambio).
+* **💵 Dual Dollar Rate Conversion (Official & Blue)**:
+  * The Argentine MTG market is benchmarked in USD, but transactions are conducted in Argentine Pesos (ARS). TradeARG fetches live rates for both **Dólar Oficial** and **Dólar Blue** via `DolarApi`.
+  * Includes an interactive toggle in the header to switch between rates in real time, automatically recalculating the value of your entire collection in ARS.
+* **🔍 Card Catalog & Search**:
+  * Seamless integration with the **Scryfall API** to instantly fetch card artwork, rarities, printings, and up-to-date pricing history in USD.
+* **📦 Collection & Inventory Management**:
+  * Track your binder/collection with precision. Add individual cards, update quantities, set languages, mark foil printings ✨, specify conditions (NM, SP, MP, HP), and add custom notes.
+* **☁️ Cloud Sync & Authentication (Supabase)**:
+  * Fully integrated authentication via **Supabase Auth**.
+  * Persist your collection and profile information in a cloud PostgreSQL database.
+  * **Guest Mode (Fallback)**: If you prefer to stay logged out, all your collection data is stored locally in your browser's `localStorage`.
+* **🤝 Community Trade Searches**:
+  * Search public binders from other operators across Argentina. View profiles with user ratings, physical locations, and preferred local game stores (LGS) to schedule face-to-face trades.
+* **🤖 Smart Auto-Matcher**:
+  * A trade matchmaking engine that analyzes your inventory and automatically highlights matching trade proposals with other community members offering cards of equivalent value.
+* **📋 Bulk Decklist Importer**:
+  * Quickly upload large lists of cards by pasting raw text (e.g., `4 Sheoldred, the Apocalypse`). The app parses quantities and fetches details from Scryfall in batches.
 
 ---
 
-## 🚀 Instalación y Desarrollo Local
+## 🛠️ Tech Stack
 
-### Prerrequisitos
-* [Node.js](https://nodejs.org/) (versión 18 o superior recomendada).
+* **Frontend**: React (v19), TypeScript, Vite, Tailwind CSS, Lucide Icons, Framer Motion.
+* **Database & Auth**: Supabase (Auth and PostgreSQL database).
+* **External APIs**: Scryfall API (MTG database) and DolarApi (exchange rates).
 
-### Pasos para Ejecutar
-1. **Clonar el repositorio**:
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+* [Node.js](https://nodejs.org/) (v18 or higher recommended).
+
+### Installation
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/icanteros/TradeARG.git
    cd TradeARG
    ```
 
-2. **Instalar dependencias**:
+2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-3. **Configurar Variables de Entorno**:
-   Crea un archivo `.env` en la raíz del proyecto basándote en `.env.example` y define tus credenciales de Supabase y API keys correspondientes:
+3. **Configure Environment Variables**:
+   Create a `.env` file in the root directory based on `.env.example` and insert your API keys and Supabase credentials:
    ```env
-   GEMINI_API_KEY="tu-api-key-de-gemini"
-   VITE_SUPABASE_URL="https://tu-proyecto.supabase.co"
-   VITE_SUPABASE_ANON_KEY="tu-anon-key-de-supabase"
+   GEMINI_API_KEY="your-gemini-api-key"
+   VITE_SUPABASE_URL="https://your-project-id.supabase.co"
+   VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
    ```
 
-4. **Correr en Entorno de Desarrollo**:
+4. **Run the Development Server**:
    ```bash
    npm run dev
    ```
-   La aplicación se abrirá en `http://localhost:3000`.
+   Open `http://localhost:3000` in your browser.
 
 ---
 
-## 🗄️ Esquema de Base de Datos (Supabase)
+## 🗄️ Database Schema Setup (Supabase)
 
-Para el correcto funcionamiento del guardado en la nube y el buscador de usuarios, ejecuta el siguiente script SQL en el panel **SQL Editor** de tu consola de Supabase:
+To enable user profiles, collection syncing, and community binder lookups, execute the following script in your Supabase **SQL Editor**:
 
 ```sql
--- Habilitar extensión UUID
+-- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
--- Tabla de Perfiles de Usuario (sincronizada con auth.users)
+-- User Profiles Table (synced with auth.users)
 create table public.profiles (
   id uuid references auth.users on delete cascade primary key,
   username text unique,
@@ -87,10 +87,10 @@ create table public.profiles (
 );
 
 alter table public.profiles enable row level security;
-create policy "Perfiles públicos visibles para todos" on public.profiles for select using (true);
-create policy "Usuarios pueden actualizar su propio perfil" on public.profiles for update using (auth.uid() = id);
+create policy "Public profiles are viewable by everyone" on public.profiles for select using (true);
+create policy "Users can update their own profile" on public.profiles for update using (auth.uid() = id);
 
--- Tabla de Colección / Inventario de Cartas
+-- Card Collections / Inventory Table
 create table public.collections (
   id uuid default gen_random_uuid() primary key,
   profile_id uuid references public.profiles(id) on delete cascade not null,
@@ -110,10 +110,10 @@ create table public.collections (
 );
 
 alter table public.collections enable row level security;
-create policy "Colecciones visibles para todos" on public.collections for select using (true);
-create policy "Usuarios pueden modificar su propia colección" on public.collections for all using (auth.uid() = profile_id);
+create policy "Collections are viewable by everyone" on public.collections for select using (true);
+create policy "Users can modify their own collection" on public.collections for all using (auth.uid() = profile_id);
 
--- Trigger automático para crear perfil tras registro en Supabase Auth
+-- Auto-create profile trigger on registration
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
