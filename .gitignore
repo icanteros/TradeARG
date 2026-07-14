@@ -114,3 +114,8 @@ tradearg_collection.csv
 
 # Keep .env.example
 !.env.example
+
+# Agent and IDE customizations
+.agents/
+.gemini/
+.claude/

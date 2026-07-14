@@ -9,6 +9,7 @@ interface CommunitySearchViewProps {
   onCardSelect: (card: Card) => void;
   onViewChange: (view: 'landing' | 'collection' | 'trade' | 'import' | 'profile') => void;
   pesoRate: number;
+  onZoomCard: (card: Card) => void;
 }
 
 interface CommunityListing {
@@ -38,7 +39,7 @@ const COMMUNITY_USERS = [
   { username: 'Valen_EDH', rating: 4.9, location: 'Bahía Blanca, Buenos Aires' }
 ];
 
-export default function CommunitySearchView({ userCollection, onCardSelect, onViewChange, pesoRate }: CommunitySearchViewProps) {
+export default function CommunitySearchView({ userCollection, onCardSelect, onViewChange, pesoRate, onZoomCard }: CommunitySearchViewProps) {
   const [activeTab, setActiveTab] = React.useState<'search' | 'matcher'>('search');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCard, setSelectedCard] = React.useState<Card | null>(null);
@@ -923,6 +924,16 @@ export default function CommunitySearchView({ userCollection, onCardSelect, onVi
           TradeARG // PROTOCOLO V.2.0.4
         </p>
       </footer>
+
+      {/* Floating "+ Add New Card" button on the side (moves with scroll) */}
+      <button
+        onClick={() => onViewChange('import')}
+        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-40 bg-gradient-to-r from-primary to-secondary text-white font-black px-5 py-3.5 rounded-full uppercase tracking-widest text-[10px] hover:brightness-110 active:scale-95 transition-all shadow-[0_0_25px_rgba(0,184,255,0.5)] cursor-pointer flex items-center gap-2 hover:shadow-[0_0_35px_rgba(0,242,255,0.7)] group border border-white/10"
+        title="Agregar Nueva Carta"
+      >
+        <span className="material-symbols-outlined text-sm font-bold group-hover:rotate-90 transition-transform duration-300">add</span>
+        <span>Add New Card</span>
+      </button>
     </div>
   );
 }

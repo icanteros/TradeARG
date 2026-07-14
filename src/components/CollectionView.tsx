@@ -8,6 +8,7 @@ interface CollectionViewProps {
   onUpdateQuantity: (cardId: string, delta: number) => void;
   onViewChange: (view: 'landing' | 'collection' | 'trade' | 'import' | 'profile') => void;
   pesoRate: number;
+  onZoomCard: (card: Card) => void;
 }
 
 export default function CollectionView({ 
@@ -16,7 +17,8 @@ export default function CollectionView({
   onEditCard, 
   onUpdateQuantity,
   onViewChange,
-  pesoRate
+  pesoRate,
+  onZoomCard
 }: CollectionViewProps) {
   // States for sorting and search filter
   const [sortBy, setSortBy] = React.useState<'value' | 'rarity' | 'name' | 'qty'>('value');
@@ -224,12 +226,7 @@ export default function CollectionView({
 
         {/* Action Buttons */}
         <div className="pb-10 px-2 space-y-3">
-          <button 
-            onClick={onAddCard}
-            className="w-full bg-primary text-white font-black py-4 rounded uppercase tracking-widest text-[10px] hover:bg-primary/90 hover:shadow-[0_0_20px_rgba(0,184,255,0.6)] active:scale-95 transition-all cursor-pointer"
-          >
-            + Add New Card
-          </button>
+          
           
           <div className="relative">
             <button 
@@ -529,7 +526,10 @@ export default function CollectionView({
                 className="group neon-card-hover card-transition bg-[#0d0d1a] border border-[#2d2d44] rounded p-2.5 flex flex-col relative"
               >
                 {/* Image and Rarity Overlays */}
-                <div className="aspect-[63/88] overflow-hidden rounded-sm bg-[#121221] relative select-none">
+                <div 
+                  className="aspect-[63/88] overflow-hidden rounded-sm bg-[#121221] relative select-none cursor-pointer group/img"
+                  onClick={() => onEditCard(card)}
+                >
                   <img 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                     src={card.imageUrl} 
@@ -560,7 +560,10 @@ export default function CollectionView({
                   {/* Hover Quick Edit Action Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3 gap-2">
                     <button 
-                      onClick={() => onEditCard(card)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditCard(card);
+                      }}
                       className="w-full bg-primary text-white py-2 rounded text-[9px] font-extrabold uppercase tracking-widest shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer"
                     >
                       Quick Edit

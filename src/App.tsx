@@ -175,6 +175,9 @@ export default function App() {
   const [selectedCard, setSelectedCard] = React.useState<Card | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
+  // Zoom state for card magnifier
+  const [zoomedCard, setZoomedCard] = React.useState<Card | null>(null);
+
   // Quick edit quantity directly on tile
   const handleUpdateQuantity = async (cardId: string, delta: number) => {
     let cardToSave: Card | null = null;
@@ -359,6 +362,7 @@ export default function App() {
             onUpdateQuantity={handleUpdateQuantity}
             onViewChange={(view) => setCurrentView(view)}
             pesoRate={activePesoRate}
+            onZoomCard={setZoomedCard}
           />
         )}
 
@@ -368,6 +372,7 @@ export default function App() {
             onCardSelect={(card) => handleEditCardClick(card)}
             onViewChange={(view) => setCurrentView(view)}
             pesoRate={activePesoRate}
+            onZoomCard={setZoomedCard}
           />
         )}
 
@@ -435,6 +440,7 @@ export default function App() {
             onSearchChange={setDashboardSearchQuery}
             onAddCardToCollection={handleAddCardToCollection}
             onCardSelect={(card) => handleEditCardClick(card)}
+            onZoomCard={setZoomedCard}
           />
         )}
 
@@ -461,7 +467,59 @@ export default function App() {
           onSave={handleSaveCardDetails}
           onDelete={handleDeleteCard}
           pesoRate={activePesoRate}
+          onZoomCard={setZoomedCard}
         />
+      )}
+
+      {/* Full-screen Card Zoom Lightbox Modal */}
+      {zoomedCard && (
+        <div 
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-zoom-out select-none animate-fadeIn"
+          onClick={() => setZoomedCard(null)}
+        >
+          {/* Close button */}
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoomedCard(null);
+            }}
+            className="absolute top-6 right-6 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2.5 rounded-full border border-white/10 flex items-center justify-center transition-all cursor-pointer hover:scale-110 z-50"
+            title="Cerrar Lupa"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+          
+          {/* Card Image Container */}
+          <div 
+            className="relative flex flex-col items-center justify-center max-w-xs sm:max-w-md w-full aspect-[63/88] rounded-2xl overflow-hidden shadow-[0_0_80px_rgba(0,184,255,0.55)] border border-primary/30 transform transition-all duration-300 scale-95 hover:scale-100 hover:shadow-[0_0_100px_rgba(0,184,255,0.7)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img 
+              className="w-full h-full object-cover cursor-zoom-out" 
+              src={zoomedCard.imageUrl} 
+              alt={zoomedCard.name}
+              referrerPolicy="no-referrer"
+              onClick={() => setZoomedCard(null)}
+            />
+            {zoomedCard.foil && (
+              <div className="absolute top-4 left-4 bg-gradient-to-r from-teal-400 via-indigo-400 to-pink-500 text-[10px] text-white font-black px-2.5 py-1 rounded-md tracking-widest uppercase shadow-[0_0_15px_rgba(0,242,255,0.5)]">
+                FOIL
+              </div>
+            )}
+            <div className="absolute top-4 right-4 bg-black/75 px-2.5 py-1 rounded text-[10px] font-black text-primary border border-primary/30 uppercase tracking-widest">
+              {zoomedCard.rarity}
+            </div>
+          </div>
+          
+          {/* Caption */}
+          <div 
+            className="mt-6 text-center text-white space-y-1 p-4 bg-[#0b1326]/80 border border-[#2d2d44]/50 rounded-xl backdrop-blur-md max-w-sm pointer-events-none"
+          >
+            <h3 className="font-sans font-black text-base text-primary tracking-tight">{zoomedCard.name}</h3>
+            <p className="font-mono text-[10px] uppercase text-[#908fa0]">{zoomedCard.setName} {zoomedCard.collectorNumber ? `• #${zoomedCard.collectorNumber}` : ''}</p>
+            <p className="font-mono text-xs text-secondary font-bold">${zoomedCard.price.toFixed(2)} USD</p>
+          </div>
+        </div>
       )}
 
     </div>

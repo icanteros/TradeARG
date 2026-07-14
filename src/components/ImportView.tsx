@@ -86,6 +86,7 @@ interface ImportViewProps {
   onSearchChange: (query: string) => void;
   onAddCardToCollection: (card: Card) => void;
   onCardSelect: (card: Card) => void;
+  onZoomCard: (card: Card) => void;
 }
 
 export default function ImportView({ 
@@ -95,7 +96,8 @@ export default function ImportView({
   searchQuery,
   onSearchChange,
   onAddCardToCollection,
-  onCardSelect
+  onCardSelect,
+  onZoomCard
 }: ImportViewProps) {
   // Tabs State
   const [activeSubTab, setActiveSubTab] = React.useState<'single' | 'bulk'>('single');
@@ -619,7 +621,7 @@ export default function ImportView({
                           >
                             <div 
                               onClick={() => onCardSelect(card)}
-                              className="aspect-[63/88] overflow-hidden rounded-sm bg-black/40 relative cursor-pointer select-none"
+                              className="aspect-[63/88] overflow-hidden rounded-sm bg-[#121221] relative cursor-pointer select-none"
                             >
                               <img
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

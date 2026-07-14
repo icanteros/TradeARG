@@ -8,29 +8,121 @@ interface CardDetailModalProps {
   onSave: (updatedCard: Card) => void;
   onDelete?: (cardId: string) => void;
   pesoRate: number;
+  onZoomCard: (card: Card) => void;
 }
 
-export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelete, pesoRate }: CardDetailModalProps) {
+export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelete, pesoRate, onZoomCard }: CardDetailModalProps) {
+  const [modalCard, setModalCard] = React.useState(card);
   const [quantity, setQuantity] = React.useState(card.quantity);
   const [price, setPrice] = React.useState(card.price);
   const [notes, setNotes] = React.useState(card.notes || '');
   const [foil, setFoil] = React.useState(card.foil);
   const [lang, setLang] = React.useState(card.lang || 'EN');
 
+  const [printings, setPrintings] = React.useState<any[]>([]);
+  const [loadingPrintings, setLoadingPrintings] = React.useState(false);
+  const [selectedPrintingId, setSelectedPrintingId] = React.useState('');
+
   // Synchronize when the card changes
   React.useEffect(() => {
+    setModalCard(card);
     setQuantity(card.quantity);
     setPrice(card.price);
     setNotes(card.notes || '');
     setFoil(card.foil);
     setLang(card.lang || 'EN');
+
+    if (!isOpen || !card.name) {
+      setPrintings([]);
+      setSelectedPrintingId('');
+      return;
+    }
+
+    // Fetch all printings of the exact card name from Scryfall
+    const fetchPrintings = async () => {
+      setLoadingPrintings(true);
+      try {
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=!%22${encodeURIComponent(card.name)}%22&unique=prints`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.data) {
+            setPrintings(data.data);
+            
+            // Find current active printing in the list by matching set name/code and collector number
+            const current = data.data.find((p: any) => 
+              (p.set_name.toLowerCase() === (card.setName || '').toLowerCase() || p.set.toLowerCase() === (card.setName || '').toLowerCase()) &&
+              p.collector_number.toLowerCase() === (card.collectorNumber || '').toLowerCase()
+            );
+            
+            if (current) {
+              setSelectedPrintingId(current.id);
+            } else if (data.data.length > 0) {
+              const fallbackSet = data.data.find((p: any) => 
+                p.set_name.toLowerCase() === (card.setName || '').toLowerCase() ||
+                p.set.toLowerCase() === (card.setName || '').toLowerCase()
+              );
+              if (fallbackSet) {
+                setSelectedPrintingId(fallbackSet.id);
+              } else {
+                setSelectedPrintingId(data.data[0].id);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching card printings:', e);
+      } finally {
+        setLoadingPrintings(false);
+      }
+    };
+    
+    // Only fetch if it's not a custom blank card
+    if (card.name !== 'Nueva Carta MTG' && !card.id.startsWith('new-')) {
+      fetchPrintings();
+    } else {
+      setPrintings([]);
+      setSelectedPrintingId('');
+    }
   }, [card, isOpen]);
 
   if (!isOpen) return null;
 
+  const handlePrintingChange = (printingId: string) => {
+    const selected = printings.find(p => p.id === printingId);
+    if (!selected) return;
+
+    setSelectedPrintingId(printingId);
+    
+    const normalPrice = selected.prices?.usd ? parseFloat(selected.prices.usd) : undefined;
+    const foilPrice = selected.prices?.usd_foil ? parseFloat(selected.prices.usd_foil) : undefined;
+    const defaultFoil = !!foilPrice && !normalPrice;
+    const priceVal = defaultFoil ? (foilPrice || 1.00) : (normalPrice || foilPrice || 1.00);
+
+    setPrice(priceVal);
+    setFoil(defaultFoil);
+    
+    let rarity: 'Mythic' | 'Rare' | 'Uncommon' | 'Common' = 'Common';
+    if (selected.rarity === 'mythic') rarity = 'Mythic';
+    else if (selected.rarity === 'rare') rarity = 'Rare';
+    else if (selected.rarity === 'uncommon') rarity = 'Uncommon';
+
+    const imageUrl = selected.image_uris?.normal || selected.image_uris?.small || (selected.card_faces && selected.card_faces[0]?.image_uris?.normal) || 'https://cards.scryfall.io/normal/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg';
+
+    setModalCard(prev => ({
+      ...prev,
+      imageUrl,
+      setName: selected.set_name,
+      collectorNumber: selected.collector_number || '0',
+      rarity,
+      purchaseUris: {
+        cardkingdom: selected.purchase_uris?.cardkingdom
+      }
+    }));
+  };
+
   const handleSave = () => {
     onSave({
-      ...card,
+      ...modalCard,
       quantity,
       price: Number(price),
       notes,
@@ -40,12 +132,12 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
     onClose();
   };
 
-  const priceHistory = card.usdPriceHistory || [
-    { date: '10 Jun', value: card.price * 0.95 },
-    { date: '15 Jun', value: card.price * 0.97 },
-    { date: '20 Jun', value: card.price * 0.99 },
-    { date: '25 Jun', value: card.price * 1.01 },
-    { date: '30 Jun', value: card.price }
+  const priceHistory = modalCard.usdPriceHistory || [
+    { date: '10 Jun', value: price * 0.95 },
+    { date: '15 Jun', value: price * 0.97 },
+    { date: '20 Jun', value: price * 0.99 },
+    { date: '25 Jun', value: price * 1.01 },
+    { date: '30 Jun', value: price }
   ];
 
   // Calculate coordinates for a custom SVG line chart
@@ -81,31 +173,39 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
 
         {/* Card Artwork display */}
         <div className="w-full md:w-2/5 bg-black/40 p-6 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-[#2d2d44]">
-          <div className="w-48 aspect-[63/88] rounded-lg overflow-hidden shadow-2xl relative select-none">
+          <div 
+            className="w-48 aspect-[63/88] rounded-lg overflow-hidden shadow-2xl relative select-none group cursor-pointer"
+            onClick={() => onZoomCard(modalCard)}
+            title="Ver en grande (Lupa)"
+          >
             <img 
-              className="w-full h-full object-cover" 
-              src={card.imageUrl} 
-              alt={card.name} 
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+              src={modalCard.imageUrl} 
+              alt={modalCard.name} 
               referrerPolicy="no-referrer"
             />
-            <div className="absolute top-2 right-2 bg-black/70 px-2 py-0.5 rounded text-[8px] font-extrabold text-[#00f2ff] uppercase border border-[#00f2ff]/30 tracking-widest">
-              {card.rarity}
+            {/* Lupa overlay on hover */}
+            <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="material-symbols-outlined text-4xl text-primary drop-shadow-[0_0_10px_rgba(0,184,255,0.6)]">zoom_in</span>
+            </div>
+            <div className="absolute top-2 right-2 bg-black/70 px-2 py-0.5 rounded text-[8px] font-extrabold text-[#00f2ff] uppercase border border-[#00f2ff]/30 tracking-widest z-10">
+              {modalCard.rarity}
             </div>
             {foil && (
-              <div className="absolute top-2 left-2 bg-gradient-to-r from-teal-400 via-indigo-400 to-pink-500 text-[8px] text-white font-extrabold px-1.5 py-0.5 rounded tracking-widest">
+              <div className="absolute top-2 left-2 bg-gradient-to-r from-teal-400 via-indigo-400 to-pink-500 text-[8px] text-white font-extrabold px-1.5 py-0.5 rounded tracking-widest z-10">
                 FOIL
               </div>
             )}
           </div>
           <div className="mt-4 text-center w-full">
-            <h4 className="font-sans font-black text-[#dae2fd] text-sm truncate max-w-[190px] mx-auto">{card.name}</h4>
-            <p className="text-[10px] text-on-surface-variant font-mono uppercase mt-0.5">{card.setName}</p>
-            <p className="text-[9px] text-[#908fa0] font-mono mt-0.5">COLLECTOR #{card.collectorNumber}</p>
+            <h4 className="font-sans font-black text-[#dae2fd] text-sm truncate max-w-[190px] mx-auto">{modalCard.name}</h4>
+            <p className="text-[10px] text-on-surface-variant font-mono uppercase mt-0.5">{modalCard.setName}</p>
+            <p className="text-[9px] text-[#908fa0] font-mono mt-0.5">COLLECTOR #{modalCard.collectorNumber}</p>
           </div>
 
-          {card.purchaseUris?.cardkingdom && (
+          {modalCard.purchaseUris?.cardkingdom && (
             <a
-              href={card.purchaseUris.cardkingdom}
+              href={modalCard.purchaseUris.cardkingdom}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-5 w-full max-w-[192px] bg-[#1a0e05] border border-[#f4c28c]/30 hover:border-[#f4c28c] text-[#f4c28c] py-2 rounded text-[9px] font-black uppercase tracking-widest text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_10px_rgba(244,194,140,0.1)]"
@@ -204,6 +304,30 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
                 </button>
               </div>
             </div>
+
+            {/* Version Selection */}
+            {printings.length > 0 && (
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-primary mb-1 font-sans">
+                  Seleccionar Versión (Edición)
+                </label>
+                {loadingPrintings ? (
+                  <div className="text-xs text-[#908fa0] animate-pulse bg-[#121221] border border-[#2d2d44] rounded px-3 py-2.5">Cargando ediciones...</div>
+                ) : (
+                  <select
+                    value={selectedPrintingId}
+                    onChange={(e) => handlePrintingChange(e.target.value)}
+                    className="w-full bg-[#121221] border border-[#2d2d44] text-[#dae2fd] text-xs font-bold rounded px-3 py-2.5 focus:outline-none focus:border-primary cursor-pointer font-sans"
+                  >
+                    {printings.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.set_name} ({p.set.toUpperCase()}) #{p.collector_number} - {p.prices.usd ? `$${p.prices.usd}` : 'N/A'} USD
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             {/* Notes field */}
             <div>
