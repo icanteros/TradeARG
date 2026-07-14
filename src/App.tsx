@@ -211,7 +211,7 @@ export default function App() {
       price: 15.00,
       quantity: 1,
       rarity: 'Rare',
-      imageUrl: 'https://images.scryfall.com/cards/normal/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg', // Retro default card back
+      imageUrl: 'https://cards.scryfall.io/normal/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg', // Retro default card back
       setName: 'Custom Set',
       collectorNumber: '42',
       foil: false,
@@ -238,8 +238,13 @@ export default function App() {
   // Callback to add a card directly to collection
   const handleAddCardToCollection = async (card: Card) => {
     if (session) {
-      // Check if it already exists in the local state
-      const existing = collection.find(c => c.name.toLowerCase() === card.name.toLowerCase());
+      // Check if it already exists in the local state (matching name, set, collector number, and foil)
+      const existing = collection.find(c => 
+        c.name.toLowerCase() === card.name.toLowerCase() &&
+        (c.setName || '').toLowerCase() === (card.setName || '').toLowerCase() &&
+        (c.collectorNumber || '').toLowerCase() === (card.collectorNumber || '').toLowerCase() &&
+        c.foil === card.foil
+      );
       if (existing) {
         const updated = { ...existing, quantity: existing.quantity + 1 };
         setCollection(prev => prev.map(c => c.id === existing.id ? updated : c));
@@ -258,7 +263,12 @@ export default function App() {
       }
     } else {
       setCollection(prev => {
-        const existing = prev.find(c => c.name.toLowerCase() === card.name.toLowerCase());
+        const existing = prev.find(c => 
+          c.name.toLowerCase() === card.name.toLowerCase() &&
+          (c.setName || '').toLowerCase() === (card.setName || '').toLowerCase() &&
+          (c.collectorNumber || '').toLowerCase() === (card.collectorNumber || '').toLowerCase() &&
+          c.foil === card.foil
+        );
         if (existing) {
           // Increment quantity if already possessed
           return prev.map(c => c.id === existing.id ? { ...c, quantity: c.quantity + 1 } : c);
@@ -321,7 +331,7 @@ export default function App() {
         currentView={currentView} 
         onViewChange={(view) => setCurrentView(view)}
         onSearchGlobal={handleSearchGlobal}
-        openAddCard={handleAddNewCardClick}
+        openAddCard={() => setCurrentView('import')}
         pesoRate={activePesoRate}
         officialRate={pesoRate}
         blueRate={bluePesoRate}
@@ -344,7 +354,7 @@ export default function App() {
         {currentView === 'collection' && (
           <CollectionView 
             cards={collection}
-            onAddCard={handleAddNewCardClick}
+            onAddCard={() => setCurrentView('import')}
             onEditCard={handleEditCardClick}
             onUpdateQuantity={handleUpdateQuantity}
             onViewChange={(view) => setCurrentView(view)}
@@ -367,7 +377,12 @@ export default function App() {
               if (session) {
                 const updatedList = [...collection];
                 for (const card of cardsToAdd) {
-                  const existingIndex = updatedList.findIndex(c => c.name.toLowerCase() === card.name.toLowerCase());
+                  const existingIndex = updatedList.findIndex(c => 
+                    c.name.toLowerCase() === card.name.toLowerCase() &&
+                    (c.setName || '').toLowerCase() === (card.setName || '').toLowerCase() &&
+                    (c.collectorNumber || '').toLowerCase() === (card.collectorNumber || '').toLowerCase() &&
+                    c.foil === card.foil
+                  );
                   if (existingIndex > -1) {
                     const updated = {
                       ...updatedList[existingIndex],
@@ -391,7 +406,12 @@ export default function App() {
                 setCollection(prev => {
                   const nextCollection = [...prev];
                   cardsToAdd.forEach(card => {
-                    const existingIndex = nextCollection.findIndex(c => c.name.toLowerCase() === card.name.toLowerCase());
+                    const existingIndex = nextCollection.findIndex(c => 
+                      c.name.toLowerCase() === card.name.toLowerCase() &&
+                      (c.setName || '').toLowerCase() === (card.setName || '').toLowerCase() &&
+                      (c.collectorNumber || '').toLowerCase() === (card.collectorNumber || '').toLowerCase() &&
+                      c.foil === card.foil
+                    );
                     if (existingIndex > -1) {
                       nextCollection[existingIndex] = {
                         ...nextCollection[existingIndex],

@@ -16,7 +16,6 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
   const [notes, setNotes] = React.useState(card.notes || '');
   const [foil, setFoil] = React.useState(card.foil);
   const [lang, setLang] = React.useState(card.lang || 'EN');
-  const [useCardKingdomPrice, setUseCardKingdomPrice] = React.useState(false);
 
   // Synchronize when the card changes
   React.useEffect(() => {
@@ -25,7 +24,6 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
     setNotes(card.notes || '');
     setFoil(card.foil);
     setLang(card.lang || 'EN');
-    setUseCardKingdomPrice(false);
   }, [card, isOpen]);
 
   if (!isOpen) return null;
@@ -143,20 +141,8 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
                 </div>
                 <div className="flex flex-col gap-0.5 mt-1 font-mono text-[9px] text-[#c7c4d7]/50 select-none">
                   <span>
-                    ARS ~{Math.round((useCardKingdomPrice ? price * 1.15 : price) * pesoRate).toLocaleString('es-AR')}
+                    ARS ~{Math.round(price * pesoRate).toLocaleString('es-AR')}
                   </span>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <input
-                      type="checkbox"
-                      id="ck-price-projection"
-                      checked={useCardKingdomPrice}
-                      onChange={(e) => setUseCardKingdomPrice(e.target.checked)}
-                      className="w-3 h-3 accent-primary cursor-pointer"
-                    />
-                    <label htmlFor="ck-price-projection" className="text-[8px] font-black uppercase text-on-surface-variant cursor-pointer">
-                      Tasa Card Kingdom (+15% Est.)
-                    </label>
-                  </div>
                 </div>
               </div>
 

@@ -1,6 +1,83 @@
 import React from 'react';
 import { Card } from '../types';
 
+interface ParsedCardLine {
+  original: string;
+  quantity: number;
+  name: string;
+  set?: string;
+  collectorNumber?: string;
+  foil: boolean;
+}
+
+function parseDecklistLine(line: string): ParsedCardLine | null {
+  let clean = line.trim();
+  if (!clean) return null;
+
+  // 1. Detect and strip foil indicator
+  let foil = false;
+  const foilBracketRegex = /[\*\[\(](f|foil)[\*\]\)]/i;
+  const foilTrailingRegex = /\s+(f|foil)$/i;
+
+  let foilMatch = clean.match(foilBracketRegex);
+  if (foilMatch) {
+    foil = true;
+    clean = clean.replace(foilBracketRegex, '').replace(/\s+/g, ' ').trim();
+  } else {
+    foilMatch = clean.match(foilTrailingRegex);
+    if (foilMatch) {
+      const tempClean = clean.replace(foilTrailingRegex, '').trim();
+      const tempWithoutQty = tempClean.replace(/^(\d+)\s*x?\s+/i, '').trim();
+      if (tempWithoutQty.length > 0) {
+        foil = true;
+        clean = tempClean;
+      }
+    }
+  }
+
+  // 2. Detect quantity at start or end
+  let quantity = 1;
+  const qtyMatch = clean.match(/^(\d+)\s*x?\s+/i);
+  if (qtyMatch) {
+    quantity = parseInt(qtyMatch[1], 10);
+    clean = clean.slice(qtyMatch[0].length).trim();
+  } else {
+    const endQtyMatch = clean.match(/\s+(\d+)\s*x?$/i);
+    const hasSetPattern = /[([][a-zA-Z0-9]{2,6}[)\]]/.test(clean);
+    if (endQtyMatch && !hasSetPattern) {
+      quantity = parseInt(endQtyMatch[1], 10);
+      clean = clean.slice(0, clean.length - endQtyMatch[0].length).trim();
+    }
+  }
+
+  // 3. Detect Set Code and Collector Number: (SET) NUMBER or [SET] NUMBER
+  let setCode: string | undefined;
+  let collectorNumber: string | undefined;
+  let name = clean;
+
+  const setCollectorRegex = /[([]([a-zA-Z0-9]{2,6})[)\]](?:\s*([a-zA-Z0-9\-★]+))?/gi;
+  let match;
+  let lastMatch: RegExpExecArray | null = null;
+  while ((match = setCollectorRegex.exec(clean)) !== null) {
+    lastMatch = match;
+  }
+
+  if (lastMatch) {
+    setCode = lastMatch[1].toLowerCase();
+    collectorNumber = lastMatch[2];
+    name = clean.slice(0, lastMatch.index).trim();
+  }
+
+  return {
+    original: line,
+    quantity,
+    name,
+    set: setCode,
+    collectorNumber,
+    foil
+  };
+}
+
 interface ImportViewProps {
   onAddCardsBulk: (cardsToAdd: Card[]) => void;
   onViewChange: (view: 'landing' | 'collection' | 'trade' | 'import' | 'profile') => void;
@@ -38,6 +115,46 @@ export default function ImportView({
     notFound: string[];
   } | null>(null);
 
+  // Autocomplete Suggestions State
+  const [suggestions, setSuggestions] = React.useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+
+  // Autocomplete suggestions effect
+  React.useEffect(() => {
+    if (activeSubTab !== 'single' || !searchQuery.trim() || searchQuery.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(searchQuery)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.data) {
+            setSuggestions(data.data);
+            setShowSuggestions(data.data.length > 0);
+          } else {
+            setSuggestions([]);
+            setShowSuggestions(false);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching autocomplete suggestions:', err);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeSubTab]);
+
+  const handleSelectSuggestion = (name: string) => {
+    onSearchChange(name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    fetchSingleFromScryfall(name);
+  };
+
   // Fetch single card from Scryfall
   const fetchSingleFromScryfall = React.useCallback(async (queryStr: string) => {
     if (!queryStr.trim()) {
@@ -52,13 +169,17 @@ export default function ImportView({
         const data = await response.json();
         if (data && data.data) {
           const mappedCards: Card[] = data.data.map((item: any) => {
-            const price = parseFloat(item.prices?.usd || item.prices?.usd_foil || '1.00');
+            const normalPrice = item.prices?.usd ? parseFloat(item.prices.usd) : undefined;
+            const foilPrice = item.prices?.usd_foil ? parseFloat(item.prices.usd_foil) : undefined;
+            const defaultFoil = !!foilPrice && !normalPrice;
+            const price = defaultFoil ? (foilPrice || 1.00) : (normalPrice || foilPrice || 1.00);
+
             let rarity: 'Mythic' | 'Rare' | 'Uncommon' | 'Common' = 'Common';
             if (item.rarity === 'mythic') rarity = 'Mythic';
             else if (item.rarity === 'rare') rarity = 'Rare';
             else if (item.rarity === 'uncommon') rarity = 'Uncommon';
             
-            const imageUrl = item.image_uris?.normal || item.image_uris?.small || (item.card_faces && item.card_faces[0]?.image_uris?.normal) || 'https://images.scryfall.com/cards/normal/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg';
+            const imageUrl = item.image_uris?.normal || item.image_uris?.small || (item.card_faces && item.card_faces[0]?.image_uris?.normal) || 'https://cards.scryfall.io/normal/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg';
             
             return {
               id: `scryfall-${item.id}`,
@@ -69,12 +190,14 @@ export default function ImportView({
               imageUrl,
               setName: item.set_name,
               collectorNumber: item.collector_number || '0',
-              foil: !!item.prices?.usd_foil && !item.prices?.usd,
+              foil: defaultFoil,
               lang: (item.lang || 'EN').toUpperCase(),
               notes: '',
               purchaseUris: {
                 cardkingdom: item.purchase_uris?.cardkingdom
               },
+              normalPrice,
+              foilPrice,
               usdPriceHistory: [
                 { date: '10 Jun', value: price * 0.95 },
                 { date: '15 Jun', value: price * 0.97 },
@@ -125,6 +248,30 @@ export default function ImportView({
     setTimeout(() => setSingleAddedMessage(null), 3000);
   };
 
+  const handleToggleSingleFoil = (cardId: string) => {
+    setSingleResults(prev => prev.map(c => {
+      if (c.id === cardId) {
+        const nextFoil = !c.foil;
+        const newPrice = nextFoil
+          ? (c.foilPrice !== undefined ? c.foilPrice : (c.normalPrice || 1.00))
+          : (c.normalPrice !== undefined ? c.normalPrice : (c.foilPrice || 1.00));
+        return {
+          ...c,
+          foil: nextFoil,
+          price: newPrice,
+          usdPriceHistory: [
+            { date: '10 Jun', value: newPrice * 0.95 },
+            { date: '15 Jun', value: newPrice * 0.97 },
+            { date: '20 Jun', value: newPrice * 0.99 },
+            { date: '25 Jun', value: newPrice * 1.01 },
+            { date: '30 Jun', value: newPrice }
+          ]
+        };
+      }
+      return c;
+    }));
+  };
+
   // Bulk import parser & resolve
   const handleParseAndFetchBulk = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,22 +279,8 @@ export default function ImportView({
 
     const lines = inputText.split('\n');
     const items = lines
-      .map(line => {
-        const clean = line.trim();
-        if (!clean) return null;
-        
-        const firstQtyMatch = clean.match(/^(\d+)\s*x?\s+(.+)$/);
-        const lastQtyMatch = clean.match(/^(.+?)\s+(\d+)\s*x?$/);
-
-        if (firstQtyMatch) {
-          return { quantity: parseInt(firstQtyMatch[1], 10), name: firstQtyMatch[2].trim() };
-        } else if (lastQtyMatch) {
-          return { quantity: parseInt(lastQtyMatch[2], 10), name: lastQtyMatch[1].trim() };
-        }
-        
-        return { quantity: 1, name: clean };
-      })
-      .filter((item): item is { quantity: number; name: string } => item !== null);
+      .map(line => parseDecklistLine(line))
+      .filter((item): item is ParsedCardLine => item !== null);
 
     if (items.length === 0) {
       setBulkErrorMsg('No se detectaron cartas válidas. Por favor ingresa al menos un nombre de carta.');
@@ -158,7 +291,7 @@ export default function ImportView({
     setBulkErrorMsg(null);
     setBulkReport(null);
 
-    const batches = [];
+    const batches: ParsedCardLine[][] = [];
     for (let i = 0; i < items.length; i += 75) {
       batches.push(items.slice(i, i + 75));
     }
@@ -169,7 +302,23 @@ export default function ImportView({
     try {
       for (const batch of batches) {
         const body = {
-          identifiers: batch.map(item => ({ name: item.name }))
+          identifiers: batch.map(item => {
+            if (item.set && item.collectorNumber) {
+              return {
+                set: item.set,
+                collector_number: item.collectorNumber
+              };
+            } else if (item.set) {
+              return {
+                name: item.name,
+                set: item.set
+              };
+            } else {
+              return {
+                name: item.name
+              };
+            }
+          })
         };
 
         const response = await fetch('https://api.scryfall.com/cards/collection', {
@@ -186,17 +335,35 @@ export default function ImportView({
 
         if (data.data) {
           data.data.forEach((scryCard: any) => {
-            const matchedInput = batch.find(b => b.name.toLowerCase() === scryCard.name.toLowerCase()) ||
-                                 batch.find(b => scryCard.name.toLowerCase().includes(b.name.toLowerCase()));
-            const qty = matchedInput ? matchedInput.quantity : 1;
+            const matchedInput = batch.find(b => {
+              const bSet = b.set?.toLowerCase();
+              const bColl = b.collectorNumber?.toLowerCase();
+              const sSet = scryCard.set?.toLowerCase();
+              const sColl = scryCard.collector_number?.toLowerCase();
+              
+              if (bSet && bColl) {
+                return bSet === sSet && bColl === sColl;
+              }
+              if (bSet) {
+                return bSet === sSet && (b.name.toLowerCase() === scryCard.name?.toLowerCase() || scryCard.name?.toLowerCase().includes(b.name.toLowerCase()));
+              }
+              return b.name.toLowerCase() === scryCard.name?.toLowerCase() || 
+                     scryCard.name?.toLowerCase().includes(b.name.toLowerCase());
+            });
 
-            const price = parseFloat(scryCard.prices?.usd || scryCard.prices?.usd_foil || '1.00');
+            const qty = matchedInput ? matchedInput.quantity : 1;
+            const isFoil = matchedInput ? matchedInput.foil : false;
+
+            const price = isFoil 
+              ? parseFloat(scryCard.prices?.usd_foil || scryCard.prices?.usd || '1.00')
+              : parseFloat(scryCard.prices?.usd || scryCard.prices?.usd_foil || '1.00');
+
             let rarity: 'Mythic' | 'Rare' | 'Uncommon' | 'Common' = 'Common';
             if (scryCard.rarity === 'mythic') rarity = 'Mythic';
             else if (scryCard.rarity === 'rare') rarity = 'Rare';
             else if (scryCard.rarity === 'uncommon') rarity = 'Uncommon';
 
-            const imageUrl = scryCard.image_uris?.normal || scryCard.image_uris?.small || (scryCard.card_faces && scryCard.card_faces[0]?.image_uris?.normal) || 'https://images.scryfall.com/cards/normal/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg';
+            const imageUrl = scryCard.image_uris?.normal || scryCard.image_uris?.small || (scryCard.card_faces && scryCard.card_faces[0]?.image_uris?.normal) || 'https://cards.scryfall.io/normal/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg';
 
             allImported.push({
               id: `scryfall-bulk-${scryCard.id}-${Date.now()}-${Math.random()}`,
@@ -207,7 +374,7 @@ export default function ImportView({
               imageUrl,
               setName: scryCard.set_name,
               collectorNumber: scryCard.collector_number || '0',
-              foil: !!scryCard.prices?.usd_foil && !scryCard.prices?.usd,
+              foil: isFoil,
               lang: (scryCard.lang || 'EN').toUpperCase(),
               notes: 'Importación masiva',
               purchaseUris: {
@@ -226,7 +393,26 @@ export default function ImportView({
 
         if (data.not_found) {
           data.not_found.forEach((nf: any) => {
-            allNotFound.push(nf.name);
+            const matchedInput = batch.find(b => {
+              if (nf.collector_number && nf.set) {
+                return b.set?.toLowerCase() === nf.set.toLowerCase() &&
+                       b.collectorNumber?.toLowerCase() === nf.collector_number.toLowerCase();
+              }
+              if (nf.name && nf.set) {
+                return b.name.toLowerCase() === nf.name.toLowerCase() &&
+                       b.set?.toLowerCase() === nf.set.toLowerCase();
+              }
+              if (nf.name) {
+                return b.name.toLowerCase() === nf.name.toLowerCase();
+              }
+              return false;
+            });
+            
+            if (matchedInput) {
+              allNotFound.push(matchedInput.original);
+            } else {
+              allNotFound.push(nf.name || (nf.set && nf.collector_number ? `${nf.set.toUpperCase()} #${nf.collector_number}` : 'Carta no encontrada'));
+            }
           });
         }
       }
@@ -374,6 +560,8 @@ export default function ImportView({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => onSearchChange(e.target.value)}
+                  onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                  onBlur={() => setShowSuggestions(false)}
                   placeholder="ESCRIBE EL NOMBRE DE LA CARTA PARA AGREGAR..."
                   className="w-full bg-transparent border-none rounded-xl py-5 md:py-6 pl-14 pr-32 text-base md:text-xl font-light text-on-surface placeholder-[#464554] focus:ring-0 outline-none uppercase font-sans tracking-wide"
                 />
@@ -385,6 +573,22 @@ export default function ImportView({
                     Buscar
                   </button>
                 </div>
+
+                {/* Autocomplete suggestions dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-[#0b1326] border border-[#2d2d44] rounded-xl overflow-hidden shadow-2xl z-30 max-h-60 overflow-y-auto divide-y divide-[#2d2d44]/30 backdrop-blur-xl">
+                    {suggestions.map((name, idx) => (
+                      <div
+                        key={idx}
+                        onMouseDown={() => handleSelectSuggestion(name)}
+                        className="px-5 py-3.5 text-xs text-[#dae2fd] hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer font-sans font-bold flex items-center gap-2.5"
+                      >
+                        <span className="material-symbols-outlined text-[14px] text-primary/60">search</span>
+                        <span>{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </form>
 
               {/* Single Search Loading or Results */}
@@ -426,6 +630,11 @@ export default function ImportView({
                               <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[8px] font-extrabold tracking-tighter uppercase bg-primary text-white">
                                 {card.rarity}
                               </div>
+                              {card.foil && (
+                                <div className="absolute top-2 left-2 bg-gradient-to-r from-teal-400 via-indigo-400 to-pink-500 text-[8px] text-white font-extrabold px-1.5 py-0.5 rounded tracking-widest uppercase">
+                                  FOIL
+                                </div>
+                              )}
                             </div>
 
                             <div className="pt-3 flex-1 flex flex-col justify-between">
@@ -439,6 +648,42 @@ export default function ImportView({
                                 <p className="text-[8px] text-on-surface-variant uppercase mt-0.5 font-mono">
                                   {card.setName} (#{card.collectorNumber})
                                 </p>
+
+                                {/* Finish Selector Toggle */}
+                                {(card.normalPrice !== undefined && card.foilPrice !== undefined) ? (
+                                  <div className="flex gap-1 mt-2 bg-[#05050a]/40 border border-[#2d2d44]/60 p-0.5 rounded text-[8px] font-sans font-bold select-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (card.foil) handleToggleSingleFoil(card.id);
+                                      }}
+                                      className={`flex-1 py-1 rounded text-center transition-all cursor-pointer uppercase ${
+                                        !card.foil 
+                                          ? 'bg-primary/20 text-primary border border-primary/30' 
+                                          : 'text-[#908fa0] hover:text-white border border-transparent'
+                                      }`}
+                                    >
+                                      Normal
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!card.foil) handleToggleSingleFoil(card.id);
+                                      }}
+                                      className={`flex-1 py-1 rounded text-center transition-all cursor-pointer uppercase ${
+                                        card.foil 
+                                          ? 'bg-pink-600/20 text-pink-400 border border-pink-500/30 font-black' 
+                                          : 'text-[#908fa0] hover:text-white border border-transparent'
+                                      }`}
+                                    >
+                                      Foil
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 text-[8px] font-mono uppercase text-[#908fa0]">
+                                    Acabado: {card.foilPrice !== undefined ? '✨ Foil Único' : '📄 Regular Único'}
+                                  </div>
+                                )}
                               </div>
 
                               <div className="mt-3 flex flex-col gap-1.5">

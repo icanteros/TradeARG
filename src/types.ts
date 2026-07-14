@@ -12,6 +12,8 @@ export interface Card {
   notes?: string;
   usdPriceHistory?: { date: string; value: number }[];
   purchaseUris?: { cardkingdom?: string };
+  normalPrice?: number;
+  foilPrice?: number;
 }
 
 export interface TradeItem {

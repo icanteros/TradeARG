@@ -109,6 +109,8 @@ Desktop.ini
 textos
 textos.txt
 textos/
+tradearg_collection.txt
+tradearg_collection.csv
 
 # Keep .env.example
 !.env.example

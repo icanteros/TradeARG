@@ -23,6 +23,49 @@ export default function CollectionView({
   const [filterQuery, setFilterQuery] = React.useState('');
   const [selectedRarity, setSelectedRarity] = React.useState<string>('All');
   const [showFilters, setShowFilters] = React.useState(false);
+  const [showCharts, setShowCharts] = React.useState(false);
+  const [showExportDropdown, setShowExportDropdown] = React.useState(false);
+
+  const downloadFile = (content: string, fileName: string, contentType: string) => {
+    const blob = new Blob([content], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAsTXT = () => {
+    if (!cards || cards.length === 0) return;
+    const content = cards
+      .map(card => {
+        const foilStr = card.foil ? ' *Foil*' : '';
+        const setStr = card.setName ? ` (${card.setName})` : '';
+        const collectorStr = card.collectorNumber ? ` ${card.collectorNumber}` : '';
+        return `${card.quantity} ${card.name}${setStr}${collectorStr}${foilStr}`;
+      })
+      .join('\n');
+
+    downloadFile(content, 'tradearg_collection.txt', 'text/plain');
+  };
+
+  const exportAsCSV = () => {
+    if (!cards || cards.length === 0) return;
+    const headers = 'Nombre,Cantidad,Edicion,Nro Coleccionista,Foil,Precio USD,Idioma,Notas\n';
+    const rows = cards
+      .map(card => {
+        const cleanName = card.name.replace(/"/g, '""');
+        const cleanSetName = card.setName.replace(/"/g, '""');
+        const cleanNotes = (card.notes || '').replace(/"/g, '""');
+        return `"${cleanName}",${card.quantity},"${cleanSetName}","${card.collectorNumber}",${card.foil ? 'SI' : 'NO'},${card.price},"${card.lang}","${cleanNotes}"`;
+      })
+      .join('\n');
+
+    downloadFile(headers + rows, 'tradearg_collection.csv', 'text/csv;charset=utf-8;');
+  };
 
   // Pagination states
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -33,7 +76,8 @@ export default function CollectionView({
     return cards
       .filter(card => {
         const matchesQuery = card.name.toLowerCase().includes(filterQuery.toLowerCase()) || 
-                             card.setName.toLowerCase().includes(filterQuery.toLowerCase());
+                             card.setName.toLowerCase().includes(filterQuery.toLowerCase()) ||
+                             (card.collectorNumber || '').toLowerCase().includes(filterQuery.toLowerCase());
         const matchesRarity = selectedRarity === 'All' || card.rarity === selectedRarity;
         return matchesQuery && matchesRarity;
       })
@@ -63,6 +107,54 @@ export default function CollectionView({
   React.useEffect(() => {
     setCurrentPage(1);
   }, [filterQuery, selectedRarity, sortBy]);
+
+  // Rarity Stats
+  const rarityStats = React.useMemo(() => {
+    const counts = { Mythic: 0, Rare: 0, Uncommon: 0, Common: 0 };
+    cards.forEach(c => {
+      if (counts[c.rarity] !== undefined) {
+        counts[c.rarity] += c.quantity;
+      }
+    });
+    const total = cards.reduce((sum, c) => sum + c.quantity, 0) || 1;
+    return {
+      Mythic: { count: counts.Mythic, percentage: Math.round((counts.Mythic / total) * 100) },
+      Rare: { count: counts.Rare, percentage: Math.round((counts.Rare / total) * 100) },
+      Uncommon: { count: counts.Uncommon, percentage: Math.round((counts.Uncommon / total) * 100) },
+      Common: { count: counts.Common, percentage: Math.round((counts.Common / total) * 100) }
+    };
+  }, [cards]);
+
+  // Foil vs Normal Stats
+  const finishStats = React.useMemo(() => {
+    let foilCount = 0;
+    let normalCount = 0;
+    cards.forEach(c => {
+      if (c.foil) {
+        foilCount += c.quantity;
+      } else {
+        normalCount += c.quantity;
+      }
+    });
+    const total = foilCount + normalCount || 1;
+    return {
+      foil: { count: foilCount, percentage: Math.round((foilCount / total) * 100) },
+      normal: { count: normalCount, percentage: Math.round((normalCount / total) * 100) }
+    };
+  }, [cards]);
+
+  // Top Sets by Value
+  const topSets = React.useMemo(() => {
+    const setValues: Record<string, number> = {};
+    cards.forEach(c => {
+      const name = c.setName || 'Otros';
+      setValues[name] = (setValues[name] || 0) + (c.price * c.quantity);
+    });
+    return Object.entries(setValues)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, value]) => ({ name, value }));
+  }, [cards]);
 
   // Aggregate Portfolio Stats
   const portfolioValueUSD = React.useMemo(() => {
@@ -130,14 +222,52 @@ export default function CollectionView({
           </button>
         </nav>
 
-        {/* Action Button */}
-        <div className="pb-10 px-2">
+        {/* Action Buttons */}
+        <div className="pb-10 px-2 space-y-3">
           <button 
             onClick={onAddCard}
             className="w-full bg-primary text-white font-black py-4 rounded uppercase tracking-widest text-[10px] hover:bg-primary/90 hover:shadow-[0_0_20px_rgba(0,184,255,0.6)] active:scale-95 transition-all cursor-pointer"
           >
             + Add New Card
           </button>
+          
+          <div className="relative">
+            <button 
+              onClick={() => setShowExportDropdown(!showExportDropdown)}
+              className="w-full bg-[#121221] border border-[#2d2d44] text-[#c7c4d7] hover:text-white font-black py-3 rounded uppercase tracking-widest text-[10px] hover:border-primary/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 z-30"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              Exportar Inventario
+            </button>
+            {showExportDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-20" 
+                  onClick={() => setShowExportDropdown(false)}
+                />
+                <div className="absolute left-0 bottom-full mb-1 w-full bg-[#0b1326] border border-[#2d2d44] rounded shadow-xl z-30 divide-y divide-[#2d2d44]/30 animate-fadeIn">
+                  <button
+                    onClick={() => {
+                      exportAsTXT();
+                      setShowExportDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-all cursor-pointer"
+                  >
+                    Como Texto (.txt / Arena)
+                  </button>
+                  <button
+                    onClick={() => {
+                      exportAsCSV();
+                      setShowExportDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-all cursor-pointer"
+                  >
+                    Como Planilla (.csv)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </aside>
 
@@ -201,6 +331,19 @@ export default function CollectionView({
               <span className="material-symbols-outlined text-[18px]">tune</span>
               <span>Filtros {selectedRarity !== 'All' ? `(${selectedRarity})` : ''}</span>
             </button>
+
+            {/* Charts Toggler */}
+            <button 
+              onClick={() => setShowCharts(!showCharts)}
+              className={`border p-2 rounded transition-all flex items-center gap-2 px-4 cursor-pointer text-xs font-bold uppercase tracking-wider ${
+                showCharts
+                  ? 'bg-secondary/15 border-secondary text-secondary shadow-[0_0_10px_rgba(0,242,255,0.2)]'
+                  : 'bg-[#121221] border-[#2d2d44] text-secondary hover:bg-[#121221]/80'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">monitoring</span>
+              <span>Estadísticas</span>
+            </button>
           </div>
         </div>
 
@@ -236,6 +379,143 @@ export default function CollectionView({
                 Limpiar Filtros
               </button>
             )}
+          </div>
+        )}
+
+        {/* Expanded Charts Panel */}
+        {showCharts && (
+          <div className="mb-8 p-6 bg-[#121221]/85 border border-primary/20 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn backdrop-blur-md">
+            
+            {/* Rarity Bar Chart */}
+            <div className="space-y-3.5">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-[#908fa0] flex items-center gap-1.5 border-b border-[#2d2d44] pb-2">
+                <span className="material-symbols-outlined text-sm text-[#ffb783]">stars</span>
+                Distribución de Rarezas
+              </h4>
+              <div className="space-y-3">
+                {/* Mythic */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px] font-mono font-bold">
+                    <span className="text-[#ffb783]">Mítica ({rarityStats.Mythic.count} u)</span>
+                    <span className="text-[#dae2fd]">{rarityStats.Mythic.percentage}%</span>
+                  </div>
+                  <div className="w-full bg-[#05050a] h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-orange-500 to-amber-400 h-full rounded-full transition-all duration-1000" 
+                      style={{ width: `${rarityStats.Mythic.percentage}%` }}
+                    />
+                  </div>
+                </div>
+                {/* Rare */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px] font-mono font-bold">
+                    <span className="text-primary">Rara ({rarityStats.Rare.count} u)</span>
+                    <span className="text-[#dae2fd]">{rarityStats.Rare.percentage}%</span>
+                  </div>
+                  <div className="w-full bg-[#05050a] h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-primary to-[#00f2ff] h-full rounded-full transition-all duration-1000" 
+                      style={{ width: `${rarityStats.Rare.percentage}%` }}
+                    />
+                  </div>
+                </div>
+                {/* Uncommon */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px] font-mono font-bold">
+                    <span className="text-slate-400">Infrecuente ({rarityStats.Uncommon.count} u)</span>
+                    <span className="text-[#dae2fd]">{rarityStats.Uncommon.percentage}%</span>
+                  </div>
+                  <div className="w-full bg-[#05050a] h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-slate-500 to-slate-400 h-full rounded-full transition-all duration-1000" 
+                      style={{ width: `${rarityStats.Uncommon.percentage}%` }}
+                    />
+                  </div>
+                </div>
+                {/* Common */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px] font-mono font-bold">
+                    <span className="text-neutral-500">Común ({rarityStats.Common.count} u)</span>
+                    <span className="text-[#dae2fd]">{rarityStats.Common.percentage}%</span>
+                  </div>
+                  <div className="w-full bg-[#05050a] h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-[#2d2d44] to-[#464554] h-full rounded-full transition-all duration-1000" 
+                      style={{ width: `${rarityStats.Common.percentage}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Foil vs Normal Panel */}
+            <div className="space-y-3.5">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-[#908fa0] flex items-center gap-1.5 border-b border-[#2d2d44] pb-2">
+                <span className="material-symbols-outlined text-sm text-pink-400">auto_awesome</span>
+                Proporción de Acabados
+              </h4>
+              <div className="flex items-center justify-between h-[120px] bg-[#05050a]/40 p-4 border border-[#2d2d44]/30 rounded-xl">
+                <div className="space-y-3 flex-1 pr-4">
+                  <div className="flex justify-between items-center text-[9px] font-mono font-bold">
+                    <span className="text-pink-400">✨ Foil ({finishStats.foil.count} u)</span>
+                    <span className="text-[#dae2fd]">{finishStats.foil.percentage}%</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[9px] font-mono font-bold">
+                    <span className="text-slate-400">📄 Regular ({finishStats.normal.count} u)</span>
+                    <span className="text-[#dae2fd]">{finishStats.normal.percentage}%</span>
+                  </div>
+                </div>
+                {/* Mini Visual Circle Gauge */}
+                <div className="relative w-18 h-18 flex items-center justify-center">
+                  <svg width="72" height="72" className="-rotate-90">
+                    <circle cx="36" cy="36" r="28" fill="transparent" stroke="#05050a" strokeWidth="8" />
+                    <circle 
+                      cx="36" 
+                      cy="36" 
+                      r="28" 
+                      fill="transparent" 
+                      stroke="url(#foilGradient)" 
+                      strokeWidth="8" 
+                      strokeDasharray="175.9"
+                      strokeDashoffset={175.9 - (175.9 * finishStats.foil.percentage) / 100}
+                      strokeLinecap="round"
+                    />
+                    <defs>
+                      <linearGradient id="foilGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#2dd4bf" />
+                        <stop offset="50%" stopColor="#818cf8" />
+                        <stop offset="100%" stopColor="#f472b6" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <span className="absolute text-[9px] font-mono font-bold text-pink-400">{finishStats.foil.percentage}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Sets Panel */}
+            <div className="space-y-3.5">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-[#908fa0] flex items-center gap-1.5 border-b border-[#2d2d44] pb-2">
+                <span className="material-symbols-outlined text-sm text-secondary">database</span>
+                Ediciones más Valiosas
+              </h4>
+              <div className="space-y-3">
+                {topSets.length > 0 ? topSets.map((set, idx) => (
+                  <div key={idx} className="flex justify-between items-center bg-[#05050a]/40 px-3 py-2 border border-[#2d2d44]/30 rounded-lg">
+                    <div className="flex items-center gap-2 max-w-[70%]">
+                      <span className="font-mono text-[9px] text-[#908fa0] font-black">#{idx + 1}</span>
+                      <span className="text-[9px] font-bold text-[#dae2fd] truncate" title={set.name}>{set.name}</span>
+                    </div>
+                    <span className="font-mono text-[9px] text-secondary font-bold">${set.value.toFixed(2)} USD</span>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-[9px] font-mono text-[#908fa0]">
+                    No hay suficientes datos.
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -295,7 +575,7 @@ export default function CollectionView({
                       {card.name}
                     </p>
                     <p className="text-[9px] text-on-surface-variant uppercase mt-0.5 font-sans">
-                      {card.setName}
+                      {card.setName} {card.collectorNumber ? `#${card.collectorNumber}` : ''}
                     </p>
                   </div>
 
@@ -327,9 +607,15 @@ export default function CollectionView({
                     </div>
                     
                     {/* Sum pricing */}
-                    <div className="flex justify-between items-center text-[9px] font-mono text-[#908fa0]">
-                      <span>Suma:</span>
-                      <span className="font-bold text-on-surface">${totalPrice.toFixed(2)} USD</span>
+                    <div className="flex flex-col gap-0.5 border-t border-[#2d2d44]/20 pt-1.5 text-[9px] font-mono text-[#908fa0]">
+                      <div className="flex justify-between items-center">
+                        <span>Suma USD:</span>
+                        <span className="font-bold text-on-surface">${totalPrice.toFixed(2)} USD</span>
+                      </div>
+                      <div className="flex justify-between items-center text-secondary font-bold">
+                        <span>Suma ARS:</span>
+                        <span>${Math.round(totalPrice * pesoRate).toLocaleString('es-AR')}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
