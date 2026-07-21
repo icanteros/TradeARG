@@ -18,6 +18,8 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
   const [notes, setNotes] = React.useState(card.notes || '');
   const [foil, setFoil] = React.useState(card.foil);
   const [lang, setLang] = React.useState(card.lang || 'EN');
+  const [isWishlist, setIsWishlist] = React.useState(card.isWishlist || false);
+  const [isTradeable, setIsTradeable] = React.useState(card.isTradeable !== false);
 
   const [printings, setPrintings] = React.useState<any[]>([]);
   const [loadingPrintings, setLoadingPrintings] = React.useState(false);
@@ -31,6 +33,8 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
     setNotes(card.notes || '');
     setFoil(card.foil);
     setLang(card.lang || 'EN');
+    setIsWishlist(card.isWishlist || false);
+    setIsTradeable(card.isTradeable !== false);
 
     if (!isOpen || !card.name) {
       setPrintings([]);
@@ -127,7 +131,9 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
       price: Number(price),
       notes,
       foil,
-      lang
+      lang,
+      isWishlist,
+      isTradeable
     });
     onClose();
   };
@@ -301,6 +307,47 @@ export default function CardDetailModal({ card, isOpen, onClose, onSave, onDelet
                   }`}
                 >
                   {foil ? '✨ Activado' : '❌ Desactivado'}
+                </button>
+              </div>
+            </div>
+
+            {/* Tengo/Busco & Visibilidad Canjeable */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-[#908fa0] mb-1 font-sans">
+                  Lista
+                </label>
+                <select
+                  value={isWishlist ? 'wish' : 'inventory'}
+                  onChange={(e) => {
+                    const wish = e.target.value === 'wish';
+                    setIsWishlist(wish);
+                    // Wishlist items are usually tradeable by default (meaning visible to match)
+                    if (wish) {
+                      setIsTradeable(true);
+                    }
+                  }}
+                  className="w-full bg-[#121221] border border-[#2d2d44] text-[#dae2fd] text-xs font-bold rounded px-3 py-2.5 focus:outline-none focus:border-primary cursor-pointer font-sans"
+                >
+                  <option value="inventory">Tengo (Mi Binder)</option>
+                  <option value="wish">Busco (Lista de Deseos)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-[#908fa0] mb-1.5 font-sans">
+                  Visibilidad de Canje
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsTradeable(!isTradeable)}
+                  className={`w-full h-9 rounded text-xs font-black uppercase tracking-widest transition-all cursor-pointer border ${
+                    isTradeable
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
+                      : 'bg-red-500/10 border-red-500/50 text-red-400'
+                  }`}
+                >
+                  {isTradeable ? '🟢 Canjeable' : '🔴 No Tradear (Privado)'}
                 </button>
               </div>
             </div>

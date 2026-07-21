@@ -8,6 +8,7 @@ import CommunitySearchView from './components/CommunitySearchView';
 import CardDetailModal from './components/CardDetailModal';
 import ImportView from './components/ImportView';
 import ProfileView from './components/ProfileView';
+import TradesInboxView from './components/TradesInboxView';
 import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 import {
@@ -15,13 +16,15 @@ import {
   updateUserProfile,
   fetchUserCollection,
   saveCollectionItem,
-  deleteCollectionItem
+  deleteCollectionItem,
+  fetchTrades
 } from './supabaseService';
 
 export default function App() {
   // Navigation State
-  const [currentView, setCurrentView] = React.useState<'landing' | 'collection' | 'trade' | 'import' | 'profile'>('landing');
+  const [currentView, setCurrentView] = React.useState<'landing' | 'collection' | 'trade' | 'import' | 'profile' | 'trades_inbox'>('landing');
   const [dashboardSearchQuery, setDashboardSearchQuery] = React.useState('');
+  const [pendingTradesCount, setPendingTradesCount] = React.useState(0);
 
   // Supabase Session State
   const [session, setSession] = React.useState<Session | null>(null);
@@ -170,6 +173,28 @@ export default function App() {
       localStorage.setItem('tradearg_collection', JSON.stringify(collection));
     }
   }, [collection, session, authLoading]);
+
+  // Poll pending trades count for authenticated user
+  React.useEffect(() => {
+    if (!session) {
+      setPendingTradesCount(0);
+      return;
+    }
+
+    const checkPendingTrades = async () => {
+      try {
+        const trades = await fetchTrades(session.user.id);
+        const pending = trades.filter(t => t.receiverId === session.user.id && t.status === 'Pending');
+        setPendingTradesCount(pending.length);
+      } catch (e) {
+        console.error('Error checking pending trades:', e);
+      }
+    };
+
+    checkPendingTrades();
+    const interval = setInterval(checkPendingTrades, 15000);
+    return () => clearInterval(interval);
+  }, [session]);
 
   // Card detail modal control
   const [selectedCard, setSelectedCard] = React.useState<Card | null>(null);
@@ -346,6 +371,7 @@ export default function App() {
         userProfile={userProfile}
         session={session}
         onLogout={() => supabase.auth.signOut()}
+        pendingTradesCount={pendingTradesCount}
       />
 
       {/* Primary views selection switcher */}
@@ -373,7 +399,31 @@ export default function App() {
             onViewChange={(view) => setCurrentView(view)}
             pesoRate={activePesoRate}
             onZoomCard={setZoomedCard}
+            profileId={session?.user.id}
           />
+        )}
+
+        {currentView === 'trades_inbox' && (
+          session ? (
+            <TradesInboxView 
+              profileId={session.user.id}
+              pesoRate={activePesoRate}
+              onViewChange={(view) => setCurrentView(view)}
+              onZoomCard={setZoomedCard}
+            />
+          ) : (
+            <div className="retro-grid min-h-screen pt-32 pb-20 px-6 max-w-md mx-auto text-center flex flex-col justify-center items-center">
+              <span className="material-symbols-outlined text-5xl text-primary mb-4 animate-pulse">lock</span>
+              <h3 className="text-xl font-black uppercase italic mb-2 text-on-surface">Iniciar Sesión Requerido</h3>
+              <p className="text-xs text-on-surface-variant mb-6">Debes iniciar sesión o crear una cuenta para ver tu bandeja de entrada de propuestas de canje.</p>
+              <button 
+                onClick={() => setCurrentView('profile')}
+                className="bg-primary text-white font-black px-6 py-3 rounded-full text-xs tracking-widest uppercase hover:scale-105 shadow-[0_0_20px_rgba(0,184,255,0.4)] transition-all cursor-pointer"
+              >
+                Ir a mi Perfil
+              </button>
+            </div>
+          )
         )}
 
         {currentView === 'import' && (

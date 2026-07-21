@@ -108,9 +108,8 @@ Desktop.ini
 .env.production.local
 textos
 textos.txt
-textos/
-tradearg_collection.txt
-tradearg_collection.csv
+tradearg_*.txt
+tradearg_*.csv
 
 # Keep .env.example
 !.env.example

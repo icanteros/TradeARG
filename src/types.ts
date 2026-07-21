@@ -14,18 +14,19 @@ export interface Card {
   purchaseUris?: { cardkingdom?: string };
   normalPrice?: number;
   foilPrice?: number;
-}
-
-export interface TradeItem {
-  card: Card;
-  quantity: number;
+  isWishlist?: boolean;
+  isTradeable?: boolean;
 }
 
 export interface TradeProposal {
   id: string;
-  userGive: TradeItem[];
-  userReceive: TradeItem[];
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverName: string;
+  offeredCard: Card | null;
+  requestedCard: Card | null;
   status: 'Pending' | 'Accepted' | 'Declined';
-  partnerName: string;
-  date: string;
+  notes?: string;
+  createdAt: string;
 }

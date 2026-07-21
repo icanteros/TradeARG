@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Card } from './types';
+import { Card, TradeProposal } from './types';
 
 // Helper to check if a string is a valid UUID
 const isUUID = (str: string): boolean => {
@@ -21,6 +21,8 @@ const mapRowToCard = (row: any): Card => {
     foil: row.is_foil,
     lang: row.language || 'EN',
     notes: row.notes || '',
+    isWishlist: row.is_wishlist,
+    isTradeable: row.is_tradeable !== false, // default to true if null/undefined
     usdPriceHistory: [
       { date: '10 Jun', value: parseFloat(row.price_usd || '1.00') * 0.95 },
       { date: '15 Jun', value: parseFloat(row.price_usd || '1.00') * 0.97 },
@@ -34,7 +36,7 @@ const mapRowToCard = (row: any): Card => {
 // Map Card interface to DB columns
 const mapCardToRow = (card: Card, profileId: string) => {
   // Use a temporary scryfall-id if it's a custom card
-  const scryfallId = card.id.startsWith('scryfall-') ? card.id.replace('scryfall-', '') : 'custom';
+  const scryfallId = card.id && card.id.startsWith('scryfall-') ? card.id.replace('scryfall-', '') : 'custom';
 
   return {
     profile_id: profileId,
@@ -49,7 +51,9 @@ const mapCardToRow = (card: Card, profileId: string) => {
     is_foil: card.foil,
     language: card.lang,
     notes: card.notes || '',
-    condition: 'NM' // default value
+    condition: 'NM', // default value
+    is_wishlist: card.isWishlist ?? false,
+    is_tradeable: card.isTradeable ?? true
   };
 };
 
@@ -183,6 +187,7 @@ export async function deleteCollectionItem(cardId: string): Promise<boolean> {
 export async function fetchCommunityListings() {
   try {
     // Fetch collections joining with the owner's profile metadata
+    // Only fetch items that are NOT on the wishlist and ARE tradeable
     const { data, error } = await supabase
       .from('collections')
       .select(`
@@ -202,6 +207,8 @@ export async function fetchCommunityListings() {
           rating
         )
       `)
+      .eq('is_tradeable', true)
+      .eq('is_wishlist', false)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -227,6 +234,237 @@ export async function fetchCommunityListings() {
     });
   } catch (e) {
     console.error('Error fetching community listings:', e);
+    return [];
+  }
+}
+
+/**
+ * Fetch all trade proposals involving the user (sent or received)
+ */
+export async function fetchTrades(profileId: string): Promise<TradeProposal[]> {
+  try {
+    const { data, error } = await supabase
+      .from('trades')
+      .select(`
+        id,
+        status,
+        notes,
+        created_at,
+        sender_id,
+        receiver_id,
+        offered_card:collections!offered_card_id(*),
+        requested_card:collections!requested_card_id(*),
+        sender:profiles!sender_id(username),
+        receiver:profiles!receiver_id(username)
+      `)
+      .or(`sender_id.eq.${profileId},receiver_id.eq.${profileId}`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map((row: any) => {
+      const senderProfile = row.sender || { username: 'Usuario' };
+      const receiverProfile = row.receiver || { username: 'Usuario' };
+      return {
+        id: row.id,
+        senderId: row.sender_id,
+        senderName: senderProfile.username,
+        receiverId: row.receiver_id,
+        receiverName: receiverProfile.username,
+        offeredCard: row.offered_card ? mapRowToCard(row.offered_card) : null,
+        requestedCard: row.requested_card ? mapRowToCard(row.requested_card) : null,
+        status: row.status as 'Pending' | 'Accepted' | 'Declined',
+        notes: row.notes || '',
+        createdAt: row.created_at
+      };
+    });
+  } catch (e) {
+    console.error('Error fetching trades:', e);
+    return [];
+  }
+}
+
+/**
+ * Propose a new trade
+ */
+export async function createTradeProposal(proposal: {
+  senderId: string;
+  receiverId: string;
+  offeredCardId: string | null;
+  requestedCardId: string | null;
+  notes?: string;
+}) {
+  try {
+    const { data, error } = await supabase
+      .from('trades')
+      .insert({
+        sender_id: proposal.senderId,
+        receiver_id: proposal.receiverId,
+        offered_card_id: proposal.offeredCardId,
+        requested_card_id: proposal.requestedCardId,
+        status: 'Pending',
+        notes: proposal.notes || ''
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.error('Error creating trade proposal:', e);
+    return null;
+  }
+}
+
+/**
+ * Update the status of a trade proposal (Accept/Decline)
+ */
+export async function updateTradeStatus(tradeId: string, status: 'Pending' | 'Accepted' | 'Declined') {
+  try {
+    const { error } = await supabase
+      .from('trades')
+      .update({ status })
+      .eq('id', tradeId);
+
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('Error updating trade status:', e);
+    return false;
+  }
+}
+
+/**
+ * Intelligent Trade Auto-Matcher calculations querying real users collections from database
+ */
+export async function fetchAutoMatchesReal(profileId: string) {
+  try {
+    // 1. Fetch current user's inventory and wishlist
+    const myItems = await fetchUserCollection(profileId);
+    const myInventory = myItems.filter(c => !c.isWishlist && c.isTradeable);
+    const myWishlist = myItems.filter(c => c.isWishlist);
+
+    if (myInventory.length === 0 && myWishlist.length === 0) {
+      return [];
+    }
+
+    // Get current user profile for location reference
+    const myProfile = await fetchUserProfile(profileId);
+    const myLocation = myProfile?.location || 'Argentina';
+
+    // 2. Fetch all other collections where tradeable = true
+    const { data, error } = await supabase
+      .from('collections')
+      .select(`
+        *,
+        profiles (
+          id,
+          username,
+          location,
+          rating
+        )
+      `)
+      .neq('profile_id', profileId)
+      .eq('is_tradeable', true);
+
+    if (error) throw error;
+
+    const otherItems = data || [];
+    const matches: any[] = [];
+
+    // Group other items by profile_id to find matches with specific users
+    const usersMap = new Map<string, any[]>();
+    otherItems.forEach((row: any) => {
+      const pId = row.profile_id;
+      if (!usersMap.has(pId)) {
+        usersMap.set(pId, []);
+      }
+      usersMap.get(pId)!.push(row);
+    });
+
+    usersMap.forEach((items, pId) => {
+      const partnerItems = items.map(mapRowToCard);
+      const partnerInventory = partnerItems.filter(c => !c.isWishlist && c.isTradeable);
+      const partnerWishlist = partnerItems.filter(c => c.isWishlist);
+      const profile = items[0].profiles || { username: 'Usuario', location: 'Argentina', rating: 5.0 };
+
+      let foundMatch = false;
+
+      // Case A: Partner has a card from my Wishlist, and I have a card from partner's Wishlist (Double Match)
+      myWishlist.forEach(myWant => {
+        const partnerHas = partnerInventory.find(pHave => pHave.name.toLowerCase() === myWant.name.toLowerCase());
+        if (partnerHas) {
+          const partnerWants = partnerWishlist.find(pWant => myInventory.some(myHave => myHave.name.toLowerCase() === pWant.name.toLowerCase()));
+          if (partnerWants) {
+            const myOffered = myInventory.find(myHave => myHave.name.toLowerCase() === partnerWants.name.toLowerCase())!;
+            matches.push({
+              id: `automatch-wish-${myWant.id}-${partnerHas.id}`,
+              partnerId: pId,
+              partnerName: profile.username,
+              partnerRating: parseFloat(profile.rating || '5.0'),
+              partnerLocation: profile.location || 'Argentina',
+              userCard: myOffered,
+              partnerCard: partnerHas,
+              priceDeltaUSD: partnerHas.price - myOffered.price,
+              notes: `¡Coincidencia Doble! Buscás su "${partnerHas.name}" y el usuario busca tu "${myOffered.name}".`
+            });
+            foundMatch = true;
+          }
+        }
+      });
+
+      // Case B: Partner has a card from my Wishlist (Single Match - user can offer something similar in value)
+      if (!foundMatch) {
+        myWishlist.forEach(myWant => {
+          const partnerHas = partnerInventory.find(pHave => pHave.name.toLowerCase() === myWant.name.toLowerCase());
+          if (partnerHas) {
+            // Find a card from my inventory closest in value to their card
+            const myOffer = myInventory.slice().sort((a, b) => 
+              Math.abs(a.price - partnerHas.price) - Math.abs(b.price - partnerHas.price)
+            )[0];
+            
+            if (myOffer) {
+              matches.push({
+                id: `automatch-wish-single-${myWant.id}-${partnerHas.id}`,
+                partnerId: pId,
+                partnerName: profile.username,
+                partnerRating: parseFloat(profile.rating || '5.0'),
+                partnerLocation: profile.location || 'Argentina',
+                userCard: myOffer,
+                partnerCard: partnerHas,
+                priceDeltaUSD: partnerHas.price - myOffer.price,
+                notes: `¡Buscás esta carta! Tiene tu "${partnerHas.name}" en su binder.`
+              });
+              foundMatch = true;
+            }
+          }
+        });
+      }
+
+      // Case C: Value-based match in same location (same city/LGS)
+      if (!foundMatch && profile.location === myLocation) {
+        myInventory.slice(0, 3).forEach(myHave => {
+          const partnerOffer = partnerInventory.find(pHave => Math.abs(pHave.price - myHave.price) / myHave.price < 0.25);
+          if (partnerOffer) {
+            matches.push({
+              id: `automatch-val-${myHave.id}-${partnerOffer.id}`,
+              partnerId: pId,
+              partnerName: profile.username,
+              partnerRating: parseFloat(profile.rating || '5.0'),
+              partnerLocation: profile.location || 'Argentina',
+              userCard: myHave,
+              partnerCard: partnerOffer,
+              priceDeltaUSD: partnerOffer.price - myHave.price,
+              notes: `Canje local por valor similar ($${myHave.price.toFixed(2)} USD vs $${partnerOffer.price.toFixed(2)} USD).`
+            });
+          }
+        });
+      }
+    });
+
+    return matches.slice(0, 10);
+  } catch (e) {
+    console.error('Error calculating real auto-matches:', e);
     return [];
   }
 }

@@ -21,6 +21,7 @@ export default function CollectionView({
   onZoomCard
 }: CollectionViewProps) {
   // States for sorting and search filter
+  const [listType, setListType] = React.useState<'inventory' | 'wishlist'>('inventory');
   const [sortBy, setSortBy] = React.useState<'value' | 'rarity' | 'name' | 'qty'>('value');
   const [filterQuery, setFilterQuery] = React.useState('');
   const [selectedRarity, setSelectedRarity] = React.useState<string>('All');
@@ -40,9 +41,13 @@ export default function CollectionView({
     URL.revokeObjectURL(url);
   };
 
+  const activeCards = React.useMemo(() => {
+    return cards.filter(card => listType === 'wishlist' ? !!card.isWishlist : !card.isWishlist);
+  }, [cards, listType]);
+
   const exportAsTXT = () => {
-    if (!cards || cards.length === 0) return;
-    const content = cards
+    if (!activeCards || activeCards.length === 0) return;
+    const content = activeCards
       .map(card => {
         const foilStr = card.foil ? ' *Foil*' : '';
         const setStr = card.setName ? ` (${card.setName})` : '';
@@ -51,13 +56,13 @@ export default function CollectionView({
       })
       .join('\n');
 
-    downloadFile(content, 'tradearg_collection.txt', 'text/plain');
+    downloadFile(content, `tradearg_${listType}.txt`, 'text/plain');
   };
 
   const exportAsCSV = () => {
-    if (!cards || cards.length === 0) return;
+    if (!activeCards || activeCards.length === 0) return;
     const headers = 'Nombre,Cantidad,Edicion,Nro Coleccionista,Foil,Precio USD,Idioma,Notas\n';
-    const rows = cards
+    const rows = activeCards
       .map(card => {
         const cleanName = card.name.replace(/"/g, '""');
         const cleanSetName = card.setName.replace(/"/g, '""');
@@ -66,7 +71,7 @@ export default function CollectionView({
       })
       .join('\n');
 
-    downloadFile(headers + rows, 'tradearg_collection.csv', 'text/csv;charset=utf-8;');
+    downloadFile(headers + rows, `tradearg_${listType}.csv`, 'text/csv;charset=utf-8;');
   };
 
   // Pagination states
@@ -75,7 +80,7 @@ export default function CollectionView({
 
   // Filter and Sort Cards logic
   const filteredCards = React.useMemo(() => {
-    return cards
+    return activeCards
       .filter(card => {
         const matchesQuery = card.name.toLowerCase().includes(filterQuery.toLowerCase()) || 
                              card.setName.toLowerCase().includes(filterQuery.toLowerCase()) ||
@@ -96,7 +101,7 @@ export default function CollectionView({
         }
         return a.name.localeCompare(b.name);
       });
-  }, [cards, sortBy, filterQuery, selectedRarity]);
+  }, [activeCards, sortBy, filterQuery, selectedRarity]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredCards.length / itemsPerPage) || 1;
@@ -108,30 +113,30 @@ export default function CollectionView({
   // Reset page if filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [filterQuery, selectedRarity, sortBy]);
+  }, [filterQuery, selectedRarity, sortBy, listType]);
 
   // Rarity Stats
   const rarityStats = React.useMemo(() => {
     const counts = { Mythic: 0, Rare: 0, Uncommon: 0, Common: 0 };
-    cards.forEach(c => {
+    activeCards.forEach(c => {
       if (counts[c.rarity] !== undefined) {
         counts[c.rarity] += c.quantity;
       }
     });
-    const total = cards.reduce((sum, c) => sum + c.quantity, 0) || 1;
+    const total = activeCards.reduce((sum, c) => sum + c.quantity, 0) || 1;
     return {
       Mythic: { count: counts.Mythic, percentage: Math.round((counts.Mythic / total) * 100) },
       Rare: { count: counts.Rare, percentage: Math.round((counts.Rare / total) * 100) },
       Uncommon: { count: counts.Uncommon, percentage: Math.round((counts.Uncommon / total) * 100) },
       Common: { count: counts.Common, percentage: Math.round((counts.Common / total) * 100) }
     };
-  }, [cards]);
+  }, [activeCards]);
 
   // Foil vs Normal Stats
   const finishStats = React.useMemo(() => {
     let foilCount = 0;
     let normalCount = 0;
-    cards.forEach(c => {
+    activeCards.forEach(c => {
       if (c.foil) {
         foilCount += c.quantity;
       } else {
@@ -143,12 +148,12 @@ export default function CollectionView({
       foil: { count: foilCount, percentage: Math.round((foilCount / total) * 100) },
       normal: { count: normalCount, percentage: Math.round((normalCount / total) * 100) }
     };
-  }, [cards]);
+  }, [activeCards]);
 
   // Top Sets by Value
   const topSets = React.useMemo(() => {
     const setValues: Record<string, number> = {};
-    cards.forEach(c => {
+    activeCards.forEach(c => {
       const name = c.setName || 'Otros';
       setValues[name] = (setValues[name] || 0) + (c.price * c.quantity);
     });
@@ -156,16 +161,16 @@ export default function CollectionView({
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([name, value]) => ({ name, value }));
-  }, [cards]);
+  }, [activeCards]);
 
   // Aggregate Portfolio Stats
   const portfolioValueUSD = React.useMemo(() => {
-    return cards.reduce((sum, card) => sum + (card.price * card.quantity), 0);
-  }, [cards]);
+    return activeCards.reduce((sum, card) => sum + (card.price * card.quantity), 0);
+  }, [activeCards]);
 
   const totalAssets = React.useMemo(() => {
-    return cards.reduce((sum, card) => sum + card.quantity, 0);
-  }, [cards]);
+    return activeCards.reduce((sum, card) => sum + card.quantity, 0);
+  }, [activeCards]);
 
   const valueInARS = Math.round(portfolioValueUSD * pesoRate);
 
@@ -271,11 +276,37 @@ export default function CollectionView({
       {/* Main Collection Display Area */}
       <main className="flex-1 md:ml-64 bg-[#05050a] px-4 md:px-10 py-10 pb-36 overflow-y-auto">
         
+        {/* Tengo / Busco Tabs Selector */}
+        <div className="flex gap-4 border-b border-[#2d2d44] pb-4 mb-6">
+          <button
+            onClick={() => setListType('inventory')}
+            className={`font-sans font-black text-[10px] uppercase tracking-widest px-5 py-2.5 rounded-lg border transition-all cursor-pointer flex items-center gap-2 ${
+              listType === 'inventory'
+                ? 'bg-primary border-primary text-white shadow-[0_0_15px_rgba(0,184,255,0.3)]'
+                : 'bg-[#121221] border-[#2d2d44] text-[#c7c4d7] hover:text-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm font-bold flex items-center justify-center">inventory_2</span>
+            Tengo (Mi Binder)
+          </button>
+          <button
+            onClick={() => setListType('wishlist')}
+            className={`font-sans font-black text-[10px] uppercase tracking-widest px-5 py-2.5 rounded-lg border transition-all cursor-pointer flex items-center gap-2 ${
+              listType === 'wishlist'
+                ? 'bg-secondary border-secondary text-white shadow-[0_0_15px_rgba(0,242,255,0.3)]'
+                : 'bg-[#121221] border-[#2d2d44] text-[#c7c4d7] hover:text-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm font-bold flex items-center justify-center">favorite</span>
+            Busco (Lista de Deseos)
+          </button>
+        </div>
+
         {/* Header section with live indicator */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-10">
           <div>
             <h2 className="font-sans text-3xl md:text-4xl font-black text-on-surface tracking-tight uppercase italic select-none">
-              MI COLECCIÓN
+              {listType === 'wishlist' ? 'Lista de Deseos' : 'Mi Colección'}
             </h2>
             <div className="flex items-center gap-2 mt-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_#00f2ff]"></span>
@@ -554,6 +585,14 @@ export default function CollectionView({
                   {card.foil && (
                     <div className="absolute top-2 left-2 bg-gradient-to-r from-teal-400 via-indigo-400 to-pink-500 text-[8px] text-white font-extrabold px-1.5 py-0.5 rounded tracking-widest uppercase">
                       FOIL
+                    </div>
+                  )}
+
+                  {/* Private (No Tradear) Overlay */}
+                  {card.isTradeable === false && (
+                    <div className="absolute bottom-2 left-2 bg-red-500/95 text-[7px] text-white font-black px-2 py-0.5 rounded tracking-widest uppercase flex items-center gap-1 border border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.3)] z-10 select-none">
+                      <span className="material-symbols-outlined text-[10px] font-bold">visibility_off</span>
+                      Privado
                     </div>
                   )}
 

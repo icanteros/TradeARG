@@ -2,8 +2,8 @@ import React from 'react';
 import { Session } from '@supabase/supabase-js';
 
 interface HeaderProps {
-  currentView: 'landing' | 'collection' | 'trade' | 'import' | 'profile';
-  onViewChange: (view: 'landing' | 'collection' | 'trade' | 'import' | 'profile') => void;
+  currentView: 'landing' | 'collection' | 'trade' | 'import' | 'profile' | 'trades_inbox';
+  onViewChange: (view: 'landing' | 'collection' | 'trade' | 'import' | 'profile' | 'trades_inbox') => void;
   onSearchGlobal: (query: string) => void;
   openAddCard: () => void;
   pesoRate: number;
@@ -14,6 +14,7 @@ interface HeaderProps {
   userProfile: { username: string; avatar: string };
   session: Session | null;
   onLogout: () => void;
+  pendingTradesCount?: number;
 }
 
 export default function Header({ 
@@ -28,7 +29,8 @@ export default function Header({
   onDollarTypeChange,
   userProfile,
   session,
-  onLogout
+  onLogout,
+  pendingTradesCount = 0
 }: HeaderProps) {
   const [searchValue, setSearchValue] = React.useState('');
 
@@ -70,6 +72,17 @@ export default function Header({
               Comunidad
             </button>
             <button 
+              onClick={() => onViewChange('trades_inbox')} 
+              className="text-on-surface-variant font-medium hover:text-primary transition-all duration-300 text-xs tracking-widest uppercase cursor-pointer flex items-center gap-1.5"
+            >
+              Canjes
+              {pendingTradesCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-red-500 text-white font-mono text-[9px] flex items-center justify-center font-black animate-pulse select-none">
+                  {pendingTradesCount}
+                </span>
+              )}
+            </button>
+            <button 
               onClick={() => onViewChange('import')} 
               className="text-on-surface-variant font-medium hover:text-primary transition-all duration-300 text-xs tracking-widest uppercase cursor-pointer"
             >
@@ -89,6 +102,17 @@ export default function Header({
               className={`text-xs font-bold uppercase tracking-widest transition-all pb-1 border-b-2 cursor-pointer ${currentView === 'trade' ? 'text-[#00f2ff] border-[#00f2ff]' : 'text-on-surface hover:text-[#00f2ff] border-transparent'}`}
             >
               Comunidad
+            </button>
+            <button 
+              onClick={() => onViewChange('trades_inbox')} 
+              className={`text-xs font-bold uppercase tracking-widest transition-all pb-1 border-b-2 cursor-pointer flex items-center gap-1.5 ${currentView === 'trades_inbox' ? 'text-primary border-primary' : 'text-on-surface hover:text-primary border-transparent'}`}
+            >
+              Canjes
+              {pendingTradesCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-red-500 text-white font-mono text-[9px] flex items-center justify-center font-black animate-pulse select-none">
+                  {pendingTradesCount}
+                </span>
+              )}
             </button>
             <button 
               onClick={() => onViewChange('import')} 

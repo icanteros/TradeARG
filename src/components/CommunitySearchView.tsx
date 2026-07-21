@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from '../types';
 import { SEARCHABLE_DATABASE } from '../data';
 import { Search, User, MapPin, MessageSquare, AlertCircle, Sparkles, CheckCircle2, UserCheck } from 'lucide-react';
-import { fetchCommunityListings } from '../supabaseService';
+import { fetchCommunityListings, fetchAutoMatchesReal, createTradeProposal } from '../supabaseService';
 
 interface CommunitySearchViewProps {
   userCollection: Card[];
@@ -10,6 +10,7 @@ interface CommunitySearchViewProps {
   onViewChange: (view: 'landing' | 'collection' | 'trade' | 'import' | 'profile') => void;
   pesoRate: number;
   onZoomCard: (card: Card) => void;
+  profileId?: string;
 }
 
 interface CommunityListing {
@@ -39,7 +40,7 @@ const COMMUNITY_USERS = [
   { username: 'Valen_EDH', rating: 4.9, location: 'Bahía Blanca, Buenos Aires' }
 ];
 
-export default function CommunitySearchView({ userCollection, onCardSelect, onViewChange, pesoRate, onZoomCard }: CommunitySearchViewProps) {
+export default function CommunitySearchView({ userCollection, onCardSelect, onViewChange, pesoRate, onZoomCard, profileId }: CommunitySearchViewProps) {
   const [activeTab, setActiveTab] = React.useState<'search' | 'matcher'>('search');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCard, setSelectedCard] = React.useState<Card | null>(null);
@@ -59,6 +60,12 @@ export default function CommunitySearchView({ userCollection, onCardSelect, onVi
   // Supabase community listings state
   const [dbListings, setDbListings] = React.useState<CommunityListing[]>([]);
   const [loadingListings, setLoadingListings] = React.useState(false);
+
+  // Auto Matcher state
+  const [autoMatches, setAutoMatches] = React.useState<any[]>([]);
+  const [loadingMatches, setLoadingMatches] = React.useState(false);
+  const [offeredCardId, setOfferedCardId] = React.useState<string | null>(null);
+  const [requestedCardId, setRequestedCardId] = React.useState<string | null>(null);
 
   // Fetch from Supabase
   React.useEffect(() => {
@@ -84,6 +91,55 @@ export default function CommunitySearchView({ userCollection, onCardSelect, onVi
       .catch(e => console.error(e))
       .finally(() => setLoadingListings(false));
   }, [sentContactIds]);
+
+  // Intelligent Trade Auto-Matcher calculations (Supabase integration)
+  React.useEffect(() => {
+    if (!profileId) {
+      // Guest mode fallback
+      if (!userCollection || userCollection.length === 0 || dbListings.length === 0) {
+        setAutoMatches([]);
+        return;
+      }
+      
+      const guestMatches: any[] = [];
+      userCollection.slice(0, 5).forEach((userCard, idx) => {
+        const matchCard = dbListings.find(listing => 
+          Math.abs(listing.priceUsd - userCard.price) / userCard.price < 0.25
+        );
+        if (matchCard) {
+          guestMatches.push({
+            id: `automatch-guest-${userCard.id}-${matchCard.id}`,
+            partnerName: matchCard.username,
+            partnerRating: matchCard.rating,
+            partnerLocation: matchCard.location,
+            userCard,
+            partnerCard: {
+              id: matchCard.id,
+              name: matchCard.cardName,
+              price: matchCard.priceUsd,
+              quantity: matchCard.quantity,
+              rarity: 'Rare',
+              imageUrl: '',
+              setName: '',
+              collectorNumber: '',
+              foil: matchCard.foil,
+              lang: matchCard.language
+            },
+            priceDeltaUSD: matchCard.priceUsd - userCard.price,
+            notes: `¡Coincidencia por Valor! Ambos tienen cartas de valor similar en la misma región.`
+          });
+        }
+      });
+      setAutoMatches(guestMatches);
+      return;
+    }
+
+    setLoadingMatches(true);
+    fetchAutoMatchesReal(profileId)
+      .then(matches => setAutoMatches(matches))
+      .catch(e => console.error('Error fetching auto matches:', e))
+      .finally(() => setLoadingMatches(false));
+  }, [profileId, userCollection, dbListings]);
 
   // Filter available cards for search suggestions
   const searchResults = React.useMemo(() => {
@@ -207,45 +263,6 @@ export default function CommunitySearchView({ userCollection, onCardSelect, onVi
     return list;
   }, [sentContactIds, dbListings]);
 
-  // Intelligent Trade Auto-Matcher calculations based on user collection
-  const autoMatches = React.useMemo(() => {
-    if (!userCollection || userCollection.length === 0) return [];
-
-    const matches: {
-      id: string;
-      partnerName: string;
-      partnerRating: number;
-      partnerLocation: string;
-      userCard: Card;
-      partnerCard: Card;
-      priceDeltaUSD: number;
-      notes: string;
-    }[] = [];
-
-    userCollection.slice(0, 6).forEach((userCard, idx) => {
-      const partner = COMMUNITY_USERS[idx % COMMUNITY_USERS.length];
-      
-      const offers = SEARCHABLE_DATABASE.filter(c => c.name.toLowerCase() !== userCard.name.toLowerCase());
-      
-      const partnerCard = offers.find(c => c.price >= userCard.price * 0.7 && c.price <= userCard.price * 1.6) || offers[idx % offers.length];
-      
-      const priceDeltaUSD = partnerCard.price - userCard.price;
-
-      matches.push({
-        id: `automatch-${userCard.id}-${partner.username}-${idx}`,
-        partnerName: partner.username,
-        partnerRating: partner.rating,
-        partnerLocation: partner.location,
-        userCard,
-        partnerCard,
-        priceDeltaUSD,
-        notes: `¡Coincidencia alta! Busca tu "${userCard.name}" y te ofrece su "${partnerCard.name}".`
-      });
-    });
-
-    return matches;
-  }, [userCollection]);
-
   // Trigger search on selected card
   const handleSelectCard = (card: Card) => {
     setSelectedCard(card);
@@ -260,6 +277,8 @@ export default function CommunitySearchView({ userCollection, onCardSelect, onVi
   // Simulated messaging
   const handleOpenContactModal = (listing: CommunityListing) => {
     setActiveListingForContact(listing);
+    setOfferedCardId(null);
+    setRequestedCardId(listing.id);
     setContactMessage(`Hola @${listing.username}, me interesa tu "${listing.cardName}" (${listing.condition}, ${listing.foil ? 'Foil' : 'Regular'}) por $${listing.priceUsd} USD. ¿Sigue disponible?`);
   };
 
@@ -279,14 +298,31 @@ export default function CommunitySearchView({ userCollection, onCardSelect, onVi
       contacted: sentContactIds.includes(match.id)
     };
     setActiveListingForContact(simulatedListing);
+    setOfferedCardId(match.userCard.id);
+    setRequestedCardId(match.partnerCard.id);
     setContactMessage(`Hola @${match.partnerName}, vi en la sección de Canjes de TradeARG que buscás mi "${match.userCard.name}" ($${match.userCard.price.toFixed(2)} USD) y ofrecés "${match.partnerCard.name}" ($${match.partnerCard.price.toFixed(2)} USD). ¿Te interesa hacer un canje?`);
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeListingForContact) return;
 
     const listingId = activeListingForContact.id;
+    
+    // Save trade proposal in database if user is logged in
+    if (profileId) {
+      const receiverId = activeListingForContact.ownerId || (activeListingForContact as any).partnerId;
+      if (receiverId && receiverId !== profileId) {
+        await createTradeProposal({
+          senderId: profileId,
+          receiverId,
+          offeredCardId: offeredCardId,
+          requestedCardId: requestedCardId,
+          notes: contactMessage
+        });
+      }
+    }
+
     setSentContactIds(prev => [...prev, listingId]);
     
     // Set notification message
@@ -295,6 +331,8 @@ export default function CommunitySearchView({ userCollection, onCardSelect, onVi
     // Close modal
     setActiveListingForContact(null);
     setContactMessage('');
+    setOfferedCardId(null);
+    setRequestedCardId(null);
 
     // Clear notification after 4 seconds
     setTimeout(() => {
